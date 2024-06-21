@@ -1,0 +1,48 @@
+var current_processable_transitions = processable_transitions();
+var i = 1;
+var T3_Rule_applied = false;
+var T3_applied_places = new Sequence(PN!Place);
+while (current_processable_transitions.notEmpty()){
+	var reduced_a_transition_this_iteration = false;
+	var reduction_result = null;
+	var T3_Rule_result = null;
+	i.println(current_processable_transitions);
+	for (processable in current_processable_transitions) {
+		reduction_result = processable.reduce();
+		if (reduction_result.get("a_transition_was_reduced?")) {
+			reduced_a_transition_this_iteration = true;
+			break;
+		}
+	}
+	if (reduced_a_transition_this_iteration) {
+		"inside While IF".println();
+		current_processable_transitions = recompute_processable_transitions(current_processable_transitions, reduction_result.get("impacted_transitions"), reduction_result.get("deleted_transition"));
+	}
+	else {
+		"inside While Else".println();
+		T3_Rule_result = applyT3Rule();
+		if (T3_Rule_result.get("a_place_was_reduced?")) {
+			T3_Rule_applied = true;
+			T3_applied_places.add(T3_Rule_result.get("impacted_place"));
+		}
+		else {
+			current_processable_transitions.println("ERROR: None of the following processable transitions could be reduced: ");
+			abort;
+			break;
+		}
+	}
+	i = i + 1;
+}
+if (T3_Rule_applied) {
+	applyT2bRule();
+	applyRefactoring(T3_applied_places);
+}
+
+operation Transition reduce() : Map {
+	var and_result = self.applyAndRule();
+	if (and_result.get("a_transition_was_reduced?")) {
+		return and_result;
+	}
+	var or_result = self.applyOrRule();
+	return or_result;
+}

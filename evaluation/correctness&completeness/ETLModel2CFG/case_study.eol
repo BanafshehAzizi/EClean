@@ -1,0 +1,384 @@
+var CFG = new CFG!CFG;
+var counter : Integer = 1;
+var previousNode : Sequence = Sequence{};
+var previousRightNode : Sequence = Sequence{};
+var emfTool : new Native("org.eclipse.epsilon.emc.emf.tools.EmfTool");
+var tempReturn : Sequence;
+var tempRule : Sequence;
+var selectedRules : Sequence = Sequence{};
+for (preblock in ETL!ETLModule.allInstances()->first().preBlocks.body.statements) {
+	for (statement in preblock) {
+		statement.createNode(false, false, null, false);
+	}
+}
+if (not ETL!TransformationRule.all.exists(t|t.isLazy())) {
+	for (tr in ETL!TransformationRule) {
+		tr.createNode(false, false, tr, true);
+	}
+	for (tr in ETL!TransformationRule) {
+		if (not selectedRules.includes(tr.name.name)) {
+			selectedRules.add(tr.name.name);
+			var StringExp = new CFG!StringExpression;
+			StringExp.value = "Check TraceabilityLink for " + tr.name.name;
+			StringExp.createNode(false, false, tr, false);
+		}
+	}
+}
+else {
+	for (tr in ETL!TransformationRule) {
+		if (not tr.isLazy()) {
+			selectedRules.add(tr.name.name);
+			tr.createNode(false, false, tr, true);
+			var StringExp = new CFG!StringExpression;
+			StringExp.value = "Check TraceabilityLink for " + tr.name.name;
+			StringExp.createNode(false, false, tr, false);
+		}
+	}
+}
+for (postblock in ETL!ETLModule.allInstances()->first().postBlocks.body.statements) {
+	for (statement in postblock) {
+		statement.createNode(false, false, null, false);
+	}
+}
+var node = new CFG!Node;
+node.name = "end";
+CFG.nodes.add(node);
+for (p in previousNode) {
+	p.outgoing.add(node);
+	node.incoming.add(p);
+}
+operation ETL!EOLElement createNode(right : Boolean, guard : Boolean, rule : ETL!TransformationRule, matching : Boolean) : Any {
+	var beginR;
+	var node = new CFG!Node;
+	node.name = counter.toString();
+	CFG.nodes.add(node);
+	if (self.type().name <> "StringExpression") {
+		node.EOLElement = emfTool.getECoreUtil().copy(self);
+	}
+	else {
+		node.EOLElement = self;
+	}
+	if (counter == 1) {
+		previousNode = Sequence{node};
+	}
+	else if (right == false) {
+		for (p in previousNode) {
+			p.outgoing.add(node);
+			node.incoming.add(p);
+		}
+		previousNode = Sequence{node};
+	}
+	else {
+		previousRightNode.last().outgoing.add(node);
+		node.incoming.add(previousRightNode.last());
+		previousRightNode.add(node);
+	}
+	counter++;
+	if (self.type().name <> "TransformationRule" and self.hasOperation()) {
+		var set : Sequence;
+		var operationName : String;
+		if (self.type().name == "MethodCallExpression") {
+			set = Sequence{self};
+		}
+		set.add(ETL!MethodCallExpression.allInstances()->select(x|x.collectAllContainer().includes(self)).flatten());
+		for (elem in set.flatten) {
+			if (elem.method.name.isOperation()) {
+				operationName = elem.method.name;
+			}
+		}
+		beginR = node;
+		ETL!OperationDefinition.allInstances()->select(o|o.name.name = operationName)->first().createNode(false, false, null, false);
+		for (s in ETL!OperationDefinition.allInstances()->select(o|o.name.name = operationName)->first().body.statements) {
+			s.createNode(false, false, null, false);
+		}
+		for (t in tempReturn) {
+			beginR.incoming.add(t);
+			t.outgoing.add(beginR);
+		}
+		tempReturn.clear();
+		previousNode = Sequence{beginR};
+	}
+	else if (not Bag{"TransformationRule", "ForStatement", "IfStatement", "WhileStatement"}.includes(self.type().name) and (self.hasEquivalent().notEmpty or self.type().name == "SpecialAssignmentStatement")) {
+		var set : Sequence;
+		var operationName : String;
+		beginR = node;
+		var target;
+		if (self.type().name == "SpecialAssignmentStatement") {
+			target = self.rhs.target;
+		}
+		else {
+			target = self.hasEquivalent().first.target;
+		}
+		var type;
+		previousRightNode.add("null");
+		previousRightNode.add(previousNode.last);
+		switch (target.isTypeOf(CFG!PropertyCallExpression)) {
+			case true: {
+				var ref = IN_MM!EReference.allInstances()->select(e|e.name = target.property.name)->first();
+				type = ref.eType.name;
+			}
+			case false: {
+				type = target.getType();
+			}
+		}
+		if (not ETL!TransformationRule.all.exists(t|t.isLazy())) {
+			for (tr in ETL!TransformationRule.allInstances()->select(r|type.getSubTypes().includes(r.source.resolvedType.elementName) and not selectedRules.includes(r.name.name))) {
+				selectedRules.add(tr.name.name);
+				var StringExp = new CFG!StringExpression;
+				StringExp.value = "Check TraceabilityLink for " + tr.name.name;
+				StringExp.createNode(false, false, tr, false);
+			}
+		}
+		else {
+			for (tr in ETL!TransformationRule.allInstances()->select(r|type.getSubTypes().includes(r.source.resolvedType.elementName) and not selectedRules.includes(r.name.name))) {
+				tr.createNode(false, false, tr, true);
+			}
+			for (tr in ETL!TransformationRule.allInstances()->select(r|type.getSubTypes().includes(r.source.resolvedType.elementName) and not selectedRules.includes(r.name.name))) {
+				selectedRules.add(tr.name.name);
+				var StringExp = new CFG!StringExpression;
+				StringExp.value = "Check TraceabilityLink for " + tr.name.name;
+				StringExp.createNode(false, false, tr, false);
+			}
+		}
+		beginR.incoming.add(previousNode.last);
+		previousNode.last.outgoing.add(beginR);
+		while (previousRightNode.last() <> "null"){
+			previousRightNode.removeAt(previousRightNode.size() - 1);
+		}
+		previousRightNode.removeAt(previousRightNode.size() - 1);
+		previousNode = Sequence{beginR};
+	}
+	switch (self.type().name) {
+		case "IfStatement": {
+			previousRightNode.add("null");
+			previousRightNode.add(node);
+			for (ifstatements in self.ifBody.block.statements) {
+				if (right) {
+					ifstatements.createNode(true, false, null, false);
+				}
+				else {
+					ifstatements.createNode(false, false, null, false);
+				}
+			}
+			if (self.elseBody.isDefined()) {
+				previousRightNode.add("null");
+				previousRightNode.add(node);
+				for (statement in self.elseBody.block.statements) {
+					statement.createNode(true, false, null, false);
+				}
+				if (not (previousRightNode.last().EOLElement.type().name == "IfStatement" and previousRightNode.last().outgoing.size() >= 2)) {
+					previousNode.add(previousRightNode.last());
+				}
+				while (previousRightNode.last() <> "null"){
+					previousRightNode.removeAt(previousRightNode.size() - 1);
+				}
+				previousRightNode.removeAt(previousRightNode.size() - 1);
+			}
+		}
+		case "ForStatement": {
+			previousRightNode.add("null");
+			previousRightNode.add(node);
+			for (forstatements in self.body.block.statements) {
+				forstatements.createNode(false, false, null, false);
+			}
+			var begin = previousRightNode.last();
+			begin.incoming.add(previousNode.last());
+			previousNode.last().outgoing.add(begin);
+			previousNode.removeAt(previousNode.size() - 1);
+		}
+		case "WhileStatement": {
+			previousRightNode.add("null");
+			previousRightNode.add(node);
+			for (whilestatements in self.body.block.statements) {
+				whilestatements.createNode(false, false, null, false);
+			}
+			var begin = previousRightNode.last();
+			begin.incoming.add(previousNode.last());
+			previousNode.last().outgoing.add(begin);
+			previousNode.removeAt(previousNode.size() - 1);
+		}
+		case "SwitchStatement": {
+			previousRightNode.add("null");
+			previousRightNode.add(node);
+			var counter : Integer = 0;
+			for (cases in self.cases) {
+				if (counter == 0) {
+					for (c in cases.body.block.statements) {
+						c.createNode(false, false, null, false);
+					}
+				}
+				else {
+					previousRightNode.add(node);
+					for (c in cases.body.block.statements) {
+						c.createNode(true, false, null, false);
+					}
+					tempReturn.add(previousRightNode.last);
+				}
+				counter++;
+			}
+			previousRightNode.add(node);
+			if (self.`default`.isDefined()) {
+				for (c in self.`default`.body.block.statements) {
+					c.createNode(true, false, null, false);
+				}
+			}
+			tempReturn.add(previousRightNode.last);
+			var begin;
+			var p = previousRightNode.clone();
+			while (p.last() <> "null"){
+				begin = p.last();
+				p.removeAt(p.size() - 1);
+			}
+			for (t in tempReturn) {
+				previousNode.add(t);
+			}
+			while (previousRightNode.last() <> "null"){
+				previousRightNode.removeAt(previousRightNode.size() - 1);
+			}
+			previousRightNode.removeAt(previousRightNode.size() - 1);
+			tempReturn.clear();
+		}
+	}
+	if (rule <> null) {
+		previousRightNode.add("null");
+		previousRightNode.add(node);
+		if (not guard and matching) {
+			if (rule.guard.isDefined()) {
+				rule.guard.createNode(false, true, rule, false);
+			}
+		}
+		if (guard or (not guard and rule.guard.isUndefined() and matching)) {
+			var StringExp = new CFG!StringExpression;
+			StringExp.value = "Create TraceabilityLink for " + rule.name.name;
+			StringExp.createNode(false, false, null, false);
+		}
+		else if (not matching) {
+			for (statement in rule.body.statements) {
+				statement.createNode(false, false, null, false);
+			}
+			var begin = previousRightNode.last();
+			for (p in previousNode) {
+				begin.incoming.add(p);
+				p.outgoing.add(begin);
+			}
+			previousNode = Sequence{};
+		}
+	}
+	if (self.type().name = "IfStatement" or self.type().name = "ForStatement" or self.type().name = "WhileStatement" or rule <> null) {
+		if (self.type().name <> "IfStatement" or right or (self.type().name == "IfStatement" and not self.elseBody.isDefined())) {
+			previousNode.add(previousRightNode.last());
+		}
+		while (previousRightNode.last() <> "null"){
+			previousRightNode.removeAt(previousRightNode.size() - 1);
+		}
+		previousRightNode.removeAt(previousRightNode.size() - 1);
+	}
+	if (node.EOLElement.type().name == "ReturnStatement") {
+		tempReturn.add(node);
+	}
+}
+operation ETL!TransformationRule isLazy() : Boolean {
+	if (not self.annotationBlock.isUndefined()) {
+		if (self.annotationBlock.statements->exists(n|n.name.name = "lazy")) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+operation String isOperation() : Boolean {
+	if (ETL!OperationDefinition.allInstances()->exists(o|o.name.name = self)) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+operation ETL!EOLElement hasOperation() : Boolean {
+	var set : Sequence;
+	if (self.type().name == "MethodCallExpression") {
+		set = Sequence{self};
+	}
+	set.add(ETL!MethodCallExpression.allInstances()->select(x|x.collectAllContainer().includes(self)).flatten());
+	for (elem in set.flatten) {
+		if (elem.method.name.isOperation()) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	return false;
+}
+operation ETL!EOLElement hasEquivalent() : Any {
+	var set : Sequence;
+	if (self.type().name == "MethodCallExpression" and Bag{"equivalent", "equivalents"}.includes(x.method.name)) {
+		set = Sequence{self};
+	}
+	set.add(ETL!MethodCallExpression.allInstances()->select(x|Bag{"equivalent", "equivalents"}.includes(x.method.name) and x.collectAllContainer().includes(self)).flatten());
+	return set.flatten;
+}
+operation ETL!TransformationRule hasEquivalentinBlock() : Boolean {
+	var set : Sequence;
+	set.add(ETL!MethodCallExpression.allInstances()->select(x|Bag{"equivalent", "equivalents"}.includes(x.method.name) and x.collectAllContainer().includes(self) and x.collectAllContainer().exists(c|Bag{"IfStatement", "ForStatement", "WhileStatement", "SwitchStatement"}.includes(c.type().name))).flatten());
+	return set.flatten.notEmpty();
+}
+operation ETL!EOLElement getType() : String {
+	for (c in self.collectAllContainer()) {
+		if (c.type().name == "ForStatement" and self.name = c.iterator.name.name) {
+			var ref = IN_MM!EReference.all.select(e|e.name = c.condition.property.name)->first();
+			return ref.eType.name;
+		}
+		else if (c.type().name == "TransformationRule") {
+			return c.source.resolvedType.elementName;
+		}
+		else if (Bag{"IfStatement", "ForStatement", "WhileStatement"}.includes(c.type().name)) {
+			for (contain in ETL!NameExpression.all.select(x|x.name = self.name and x.collectAllContainer().includes(c))) {
+				if (Bag{"FormalParameterExpression", "VariableDeclarationExpression"}.includes(contain.type().name)) {
+					return contain.resolvedType.elementName;
+				}
+			}
+		}
+	}
+}
+operation ETL!EOLElement collectAllContainedElementsName() : Sequence(OclAny) {
+	var s : Sequence = Sequence{};
+	for (elem in ETL!NameExpression.allInstances()->select(x|x.collectAllContainer().includes(self)).flatten()) {
+		if (elem.container.type().name == "MethodCallExpression") {
+			if (elem.container.method == elem) {
+				s.add(elem.name + "()");
+			}
+			else {
+				s.add(elem.name);
+			}
+		}
+		else {
+			s.add(elem.name);
+		}
+	}
+	return s;
+}
+operation Any getSubTypes() : Any {
+	var a : OrderedSet;
+	a.add(self);
+	for (class in IN_MM!EClass.all) {
+		if (class.eSuperTypes.name.includes(self)) {
+			a.add(class.name.getSubTypes().flatten);
+		}
+	}
+	return a.flatten;
+}
+operation ETL!EOLElement collectAllContainer() : Sequence(OclAny) {
+	var contain : Sequence = Sequence{self.container};
+	if (self.container.isUndefined()) {
+		contain = Sequence{};
+	}
+	else {
+		contain.add(self.container.collectAllContainer());
+	}
+	return contain.flatten()->reject(x|x.isUndefined());
+}

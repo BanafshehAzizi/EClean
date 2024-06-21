@@ -1,0 +1,1999 @@
+var it;
+var PC : Sequence = Sequence{};
+var SymbolTable : Map = Map{"top" = -1, "items" = Sequence{}};
+var Traceability_Linkes : Sequence = Sequence{};
+var MappingTable : Sequence = Sequence{};
+var AllPCString : Sequence = Sequence{};
+var Allc1 : Sequence = Sequence{};
+var model2code : new Native("org.eclipse.epsilon.eol.visitor.printer.impl.EolPrinter");
+var interfaceRule : new Native("seet.layout.interfaceRule");
+var MyChecker : new Native("seet.checker.ATLtoAnATLyzer");
+var emfTool : new Native("org.eclipse.epsilon.emc.emf.tools.EmfTool");
+var DFS : Map = Map{"top" = -1, "items" = Sequence{}};
+var adjucent : CFG!Node;
+var packageCounter : Integer = 1;
+var counter : Integer = 0;
+var guard : Any = "";
+var IfGuard : Boolean = true;
+var ret = null;
+var package1;
+var package = new Ecore!EPackage;
+package.name = "Target" + packageCounter;
+var mode : String = interfaceRule.callMode();
+var selectedRules : Sequence = Sequence{};
+var nodes : Sequence = CFG!CFG.all.nodes.flatten;
+for (n in nodes) {
+	n.visited = false;
+}
+if (nodes.at(0).EOLElement.type().name == "TransformationRule") {
+	nodes.at(0).EOLElement.ConditionalStatement();
+}
+else {
+	nodes.at(0).EOLElement.search(null);
+}
+nodes.at(0).visited = true;
+DFS.push(nodes.at(0));
+while (DFS.get("top") <> -1){
+	adjucent = DFS.peek().getAdjucent();
+	if (SymbolTable.get("items").notEmpty() and DFS.peek().type().name <> "TransformationRule" and (not (DFS.peek().EOLElement.type().name == "StringExpression" and DFS.peek().EOLElement.value.startsWith("Check TraceabilityLink"))) and DFS.peek().outgoing.select(c|c.incoming.size > 1).size > 0 and adjucent.visited == true) {
+		var size = DFS.peek().outgoing.select(c|c.incoming.size > 1).first.incoming.select(c|c.visited == false and c.name.asInteger() < DFS.peek().name.asInteger()).size;
+		if (DFS.peek().outgoing.select(c|c.incoming.size > 1).first.incoming.exists(c|c.visited == false and (c.name.asInteger() > DFS.peek().name.asInteger()))) {
+			size = size + 1;
+		}
+		else if (size == 0) {
+			size = 1;
+		}
+		var i = 0;
+		while (i < size){
+			SymbolTable.popScope();
+			i++;
+		}
+	}
+	if (DFS.peek().EOLElement.type().name == "ReturnStatement" and DFS.peek().EOLElement.collectAllContainer().exists(c|c.type().name == "OperationDefinition" and Bag{"IfStatement", "ForStatement", "WhileStatement", "SwitchStatement"}.includes(c.type().name))) {
+		SymbolTable.popScope();
+	}
+	if (adjucent == null) {
+		DFS.pop();
+	}
+	else if (adjucent.name == "end") {
+		var constraint = ConstraintSolver1(PC, true);
+		AllPCString.add(constraint.get(0));
+		Allc1.add(constraint.get(1));
+		if (mode == "Interactive") {
+			while (DFS.get("top") <> -1){
+				DFS.pop();
+			}
+		}
+		else if (PC.isEmpty()) {
+			adjucent.visited = true;
+			while (DFS.get("top") <> -1){
+				DFS.pop();
+			}
+		}
+		else {
+			var cPC = PC.clone();
+			while (not cPC.isEmpty() and cPC.last().get("two-paths") == false){
+				PC.removeAt(PC.size() - 1);
+				cPC = PC.clone();
+			}
+			if (not PC.isEmpty()) {
+				var DFS1 = DFS.clone();
+				while (DFS1.get("top") <> -1 and DFS1.peek().name <> PC.last().get("nodeNumber")){
+					DFS.pop();
+					DFS1 = DFS.clone();
+				}
+				PC.last().put("two-paths", false);
+				PC.last().put("not", true);
+				PC.last().put("value", "No");
+				for (n in nodes.select(n|n.name <> "end" and n.name.asInteger() > DFS.peek().name.asInteger())) {
+					n.visited = false;
+				}
+				var cMappingTable = MappingTable.clone();
+				while (cMappingTable.last().get("nodeNumber") <> DFS.peek().name){
+					MappingTable.removeAt(MappingTable.size() - 1);
+					cMappingTable = MappingTable.clone();
+				}
+				var temp = MappingTable.select(c|c.get("nodeNumber") = DFS.peek().name).first;
+				if (temp.isDefined()) {
+					if (packageCounter == 1) {
+						package1 = new Ecore!EPackage;
+						package1.name = "Target";
+					}
+					package1.eSubPackages.add(package);
+					packageCounter++;
+					package = new Ecore!EPackage;
+					package.name = "Target" + packageCounter;
+					package1.eSubPackages.add(package);
+					SymbolTable.put("items", temp.get("SymbolTableItems").clone());
+					SymbolTable.put("top", temp.get("SymbolTableItems").size - 1);
+					selectedRules = temp.get("selectedRules").clone();
+					if (temp.get("Traceabilitylink").isDefined()) {
+						Traceability_Linkes = temp.get("Traceabilitylink").clone();
+					}
+					else {
+						Traceability_Linkes = Sequence{};
+					}
+					var ecoreUtil = emfTool.ecoreUtil;
+					var source = temp.get("outputModel");
+					var copy = emfTool.getECoreUtil().copy(temp.get("outputModel"));
+					var s = Ecore!EPackage.all.select(p|p.name = "Target" + packageCounter).first();
+					for (c in source.eClassifiers) {
+						var targetCloneable = ecoreUtil.copy(c);
+						s.eClassifiers.add(targetCloneable);
+					}
+					for (c in source.eAnnotations) {
+						var targetCloneable = ecoreUtil.copy(c);
+						s.eAnnotations.add(targetCloneable);
+					}
+				}
+			}
+			else {
+				adjucent.visited = true;
+				while (DFS.get("top") <> -1){
+					DFS.pop();
+				}
+			}
+		}
+	}
+	else {
+		if (adjucent.EOLElement.type().name == "TransformationRule") {
+			if (adjucent.visited == false) {
+				adjucent.EOLElement.ConditionalStatement();
+			}
+		}
+		else if (adjucent.EOLElement.type().name == "StringExpression" and adjucent.EOLElement.value.startsWith("Create TraceabilityLink")) {
+			var tr = ETL!TransformationRule.all.select(tr|tr.name.name == adjucent.EOLElement.value.substring(28)).first;
+			for (target in tr.targets) {
+				if (not Traceability_Linkes->exists(c|c.get("target") = target.resolvedType.elementName)) {
+					var class = new Ecore!EClass;
+					class.name = target.resolvedType.elementName;
+					package.eClassifiers.add(class);
+					Traceability_Linkes.add(Map{"rule" = tr.name.name, "source" = tr.source.resolvedType.elementName, "target" = target.resolvedType.elementName, "class" = class});
+				}
+				else {
+					Traceability_Linkes.add(Map{"rule" = tr.name.name, "source" = tr.source.resolvedType.elementName, "target" = target.resolvedType.elementName, "class" = null});
+				}
+			}
+			selectedRules.add(tr.name.name);
+		}
+		else if (adjucent.EOLElement.type().name == "StringExpression" and adjucent.EOLElement.value.startsWith("Check TraceabilityLink")) {
+			var tr = ETL!TransformationRule.all.select(tr|tr.name.name == adjucent.EOLElement.value.substring(27)).first;
+			if (selectedRules.includes(tr.name.name)) {
+				if (adjucent.visited == false) {
+					if (DFS.get("items").select(c|c.EOLElement.type().name == "TransformationRule" and c.EOLElement.name.name = tr.name.name)->size() > 0) {
+						SymbolTable.push(Map{"name" = null});
+						var newRecord = Map{"name" = tr.source.name.name, "type" = tr.source.resolvedType.elementName, "value" = null};
+						SymbolTable.push(newRecord);
+						for (target in tr.targets) {
+							newRecord = Map{"name" = target.name.name, "type" = target.resolvedType.elementName, "value" = Traceability_Linkes->select(s|s.get("rule") = tr.name.name and s.get("target") = target.name.name)->collect(t|t.get("class"))->first()};
+							SymbolTable.push(newRecord);
+						}
+					}
+				}
+			}
+		}
+		else if (adjucent.EOLElement.type().name == "OperationDefinition") {
+			SymbolTable.push(Map{"name" = null});
+			for (param in adjucent.EOLElement.parameters) {
+				if (param.resolvedType.type().name == "ModelElementType") {
+					SymbolTable.push(Map{"name" = param.name.name, "type" = param.resolvedType.elementName, "value" = ""});
+				}
+				else {
+					SymbolTable.push(Map{"name" = param.name.name, "type" = param.type().name, "value" = ""});
+				}
+			}
+		}
+		else if (DFS.peek().EOLElement.type().name == "TransformationRule") {
+			guard = DFS.peek().EOLElement.Condition();
+		}
+		else if (adjucent.EOLElement.hasOperation() and adjucent.visited == true) {
+			DFS.push(adjucent);
+			adjucent.EOLElement.search(null);
+			ret = null;
+		}
+		else if (adjucent.EOLElement.hasOperation()) {
+			adjucent.visited = true;
+			DFS.push(adjucent);
+		}
+		else if (adjucent.visited <> true) {
+			ret = adjucent.EOLElement.search(null);
+		}
+		adjucent.visited = true;
+		if (adjucent.EOLElement.type().name <> "ReturnStatement" or (adjucent.EOLElement.type().name == "ReturnStatement" and adjucent.name <> DFS.peek().name)) {
+			DFS.push(adjucent);
+		}
+	}
+}
+showResult();
+operation CFG!Node getAdjucent() : Any {
+	if (Bag{"IfStatement", "TransformationRule", "ForStatement", "WhileStatement"}.includes(self.EOLElement.type().name)) {
+		var condition;
+		if (self.EOLElement.type().name == "IfStatement" or self.EOLElement.type().name == "ForStatement" or self.EOLElement.type().name == "WhileStatement") {
+			condition = self.EOLElement.condition;
+		}
+		else {
+			condition = self.EOLElement.source;
+		}
+		var ifCondition : String;
+		if (Bag{"IfStatement", "ForStatement", "WhileStatement"}.includes(self.EOLElement.type().name)) {
+			ifCondition = model2code.print(condition);
+			ifCondition = ifCondition.replace("\n", "");
+			var target : ETL!EOLElement = searchTarget(condition);
+			var i : Integer;
+			for (c in ifCondition.toCharSequence()) {
+				if (c == ".") {
+					break;
+				}
+				i++;
+			}
+			if (condition.type().name == "NotOperatorExpression") {
+				ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, i).replace(target.name, searchType(condition)) + ifCondition.substring(i, ifCondition.length());
+			}
+			else if (not (condition.type().name == "MethodCallExpression" and Bag{"all", "allInstances"}.includes(condition.method.name))) {
+				ifCondition = ifCondition.substring(0, i).replace(target.name, searchType(condition)) + ifCondition.substring(i, ifCondition.length());
+			}
+		}
+		else if (self.EOLElement.type().name == "TransformationRule") {
+			ifCondition = condition.resolvedType.elementName;
+		}
+		if (PCExist(ifCondition, false) == "Yes" and self.outgoing[0].visited == false) {
+			return self.outgoing[0];
+		}
+		else {
+			return self.outgoing.last;
+		}
+	}
+	if (self.EOLElement.type().name == "StringExpression" and self.EOLElement.value.startsWith("Check TraceabilityLink")) {
+		var tr = ETL!TransformationRule.all.select(tr|tr.name.name == self.EOLElement.value.substring(27)).first;
+		if (not selectedRules.includes(tr.name.name) or (selectedRules.includes(tr.name.name) and self.outgoing[0].visited == true)) {
+			return self.outgoing.last;
+		}
+	}
+	if (self.visited == true and self.incoming.collect(c|c.EOLElement.type().name).includes("TransformationRule") and self.outgoing.select(c|c.visited == true and self.name.asInteger() < c.name.asInteger())->size > 0) {
+		if (guard == "") {
+			if (self.EOLElement.expression.hasOperation()) {
+				if (self.EOLElement.expression.type().name == "NotOperatorExpression") {
+					guard = (not DFS.get("items").invert().select(c|c.EOLElement.type().name == "ReturnStatement").first.EOLElement.search(null));
+				}
+				else {
+					guard = DFS.get("items").invert().select(c|c.EOLElement.type().name == "ReturnStatement").first.EOLElement.search(null);
+				}
+			}
+			else {
+				guard = PCExist(self.EOLElement.expression, true);
+			}
+		}
+		if (guard == true) {
+			guard = "";
+			if (self.outgoing[0].EOLElement.type().name == "OperationDefinition") {
+				return self.outgoing[1];
+			}
+			else {
+				return self.outgoing[0];
+			}
+		}
+		else {
+			guard = "";
+			return self.outgoing.last;
+		}
+	}
+	if (self.EOLElement.type().name == "SwitchStatement") {
+		var caseNumber : Integer = 0;
+		for (i in self.outgoing) {
+			if (i.visited = false and caseNumber <> self.outgoing.size() - 1) {
+				var condition;
+				condition = self.EOLElement.expression;
+				var a : ETL!EqualsOperatorExpression = new ETL!EqualsOperatorExpression;
+				a.rhs = emfTool.getECoreUtil().copy(self.EOLElement.cases[caseNumber].expression);
+				a.lhs = emfTool.getECoreUtil().copy(condition);
+				var ifCondition : String;
+				ifCondition = model2code.print(a);
+				ifCondition = ifCondition.replace("\n", "");
+				var target : ETL!EOLElement = searchTarget(a);
+				var counter : Integer;
+				for (c in ifCondition.toCharSequence()) {
+					if (c == ".") {
+						break;
+					}
+					counter++;
+				}
+				if (a.type().name == "NotOperatorExpression") {
+					ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, counter).replace(target.name, searchType(a)) + ifCondition.substring(counter, ifCondition.length());
+				}
+				else if (not (a.type().name == "MethodCallExpression" and Bag{"all", "allInstances"}.includes(a.method.name))) {
+					ifCondition = ifCondition.substring(0, counter).replace(target.name, searchType(a)) + ifCondition.substring(counter, ifCondition.length());
+				}
+				var b : Sequence = Sequence{};
+				b.add(a);
+				var ifc : String;
+				var twoPath : Boolean = false;
+				if (PCExist(ifCondition, false) <> "") {
+					ifc = PCExist(ifCondition, false);
+				}
+				else {
+					var tempPC : Sequence = PC.clone();
+					var tempPC_Satisfy : String;
+					var not_tempPC_Satisfy : String;
+					tempPC.add(Map{"condition" = b.clone().first, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = true, "nodeNumber" = self.name, "rule" = false});
+					tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+					tempPC.removeAt(tempPC.size() - 1);
+					tempPC.add(Map{"condition" = b.clone().first, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = true, "nodeNumber" = self.name, "rule" = false});
+					not_tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+					if (tempPC_Satisfy == "Satisfiable" and not_tempPC_Satisfy == "Satisfiable") {
+						twoPath = true;
+						if (mode == "Automatic") {
+							if (i.visited == false) {
+								ifc = "Yes";
+							}
+							else {
+								ifc = "No";
+							}
+						}
+						else {
+							ifc = interfaceRule.callGuard(ifCondition, false, r);
+						}
+					}
+					else if (tempPC_Satisfy == "Satisfiable") {
+						ifc = "Yes";
+					}
+					else if (not_tempPC_Satisfy == "Satisfiable") {
+						ifc = "No";
+					}
+					else {
+						throw "UnSatisfiable Path!";
+					}
+				}
+				if (MappingTable.select(c|c.get("nodeNumber") = self.name).isEmpty()) {
+					var source = Ecore!EPackage.all.select(p|p.name = "Target" + packageCounter).first;
+					var copy = emfTool.getECoreUtil().copy(source);
+					MappingTable.add(Map{"nodeNumber" = self.name, "SymbolTableItems" = SymbolTable.get("items").clone(), "TraceabilityLink" = Traceability_Linkes.clone(), "outputModel" = copy, "selectedRules" = selectedRules.clone()});
+				}
+				switch (ifc) {
+					case "Yes": {
+						IfGuard = true;
+						SymbolTable.push(Map{"name" = null});
+						if (PCExist(ifCondition, false) == "") {
+							PC.add(Map{"condition" = b.clone().first, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = twoPath, "nodeNumber" = self.name, "rule" = false});
+						}
+						return i;
+					}
+					case "No": {
+						IfGuard = false;
+						if (PCExist(ifCondition, false) == "") {
+							PC.add(Map{"condition" = b.clone().first, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = twoPath, "nodeNumber" = self.name, "rule" = false});
+						}
+					}
+				}
+			}
+			caseNumber = caseNumber + 1;
+		}
+	}
+	if (self.outgoing[0].visited == false or (self.outgoing[0].name.asInteger() < self.name.asInteger())) {
+		return self.outgoing[0];
+	}
+	else if (self.outgoing.size() > 1 and (self.outgoing[1].visited == false or (self.outgoing[1].EOLElement.type().name == "StringExpression" and self.outgoing[1].EOLElement.value.startsWith("Check TraceabilityLink"))) or (not Bag{"TransformationRule", "ForStatement", "IfStatement", "WhileStatement"}.includes(self.type().name) and self.EOLElement.hasEquivalent().notEmpty())) {
+		return self.outgoing[1];
+	}
+	else {
+		return null;
+	}
+}
+operation Map push(data : Any) : Boolean {
+	self.put("top", self.get("top") + 1);
+	self.get("items").add(data);
+}
+operation Map pop() : Any {
+	var data = self.get("items").at(self.get("top"));
+	self.get("items").removeAt(self.get("top"));
+	self.put("top", self.get("top") - 1);
+	return data;
+}
+operation Map peek() : Any {
+	return self.get("items").at(self.get("top"));
+}
+operation ETL!TransformationRule isLazy() : Boolean {
+	if (not self.annotationBlock.isUndefined()) {
+		if (self.annotationBlock.statements->exists(n|n.name.name = "lazy")) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+operation ETL!TransformationRule isPrimary() : Boolean {
+	if (not self.annotationBlock.isUndefined()) {
+		if (self.annotationBlock.statements->exists(n|n.name.name = "primary")) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+operation CFG!EOLElement Condition() : Boolean {
+	if (self.guard.isDefined()) {
+		if (self.guard.expression.hasOperation()) {
+			if (self.guard.expression.type().name == "NotOperatorExpression") {
+				return (not self.guard.expression.expression.search(self));
+			}
+			else {
+				return self.guard.expression.search(self);
+			}
+		}
+		else {
+			if (self.guard.expression.type().name == "BooleanExpression") {
+				return self.guard.expression.value;
+			}
+			var twoPath : Boolean = false;
+			var ifCondition : String;
+			if (self.guard.type().name == "ExpressionOrStatementBlock") {
+				ifCondition = model2code.print(self.guard.expression);
+			}
+			else {
+				ifCondition = model2code.print(self.guard);
+			}
+			ifCondition = ifCondition.replace("\n", "");
+			var target : CFG!EOLElement = searchTarget(self.guard.expression);
+			var type;
+			if (self.source.name.name == target.name) {
+				type = self.source.resolvedType.elementName;
+			}
+			var i : Integer;
+			for (c in ifCondition.toCharSequence()) {
+				if (c == ".") {
+					break;
+				}
+				i++;
+			}
+			if (self.guard.type().name == "NotOperatorExpression") {
+				ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, i).replace(target.name, type) + ifCondition.substring(i, ifCondition.length());
+			}
+			else {
+				ifCondition = ifCondition.substring(0, i).replace(target.name, type) + ifCondition.substring(i, ifCondition.length());
+			}
+			var g : String;
+			if (PCExist(ifCondition, true) <> "") {
+				g = PCExist(ifCondition, true);
+			}
+			else {
+				var tempPC : Sequence = PC.clone();
+				var tempPC_Satisfy : String;
+				var not_tempPC_Satisfy : String;
+				tempPC.add(Map{"condition" = self.guard, "type" = self.source.resolvedType.elementName, "not" = false, "value" = "Yes"});
+				tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+				tempPC.removeAt(tempPC.size() - 1);
+				tempPC.add(Map{"condition" = self.guard, "type" = self.source.resolvedType.elementName, "not" = true, "value" = "No"});
+				not_tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+				if (tempPC_Satisfy == "Satisfiable" and not_tempPC_Satisfy == "Satisfiable") {
+					twoPath = true;
+					if (mode == "Automatic") {
+						g = "Yes";
+					}
+					else {
+						g = interfaceRule.callGuard(ifCondition, true, self.name.name);
+					}
+				}
+				else if (tempPC_Satisfy == "Satisfiable") {
+					g = "Yes";
+				}
+				else if (not_tempPC_Satisfy == "Satisfiable") {
+					g = "No";
+				}
+				else {
+					throw "UnSatisfiable Path!";
+				}
+			}
+			if (g == "Yes") {
+				if (PCExist(ifCondition, true) == "") {
+					IfGuard = true;
+					PC.add(Map{"condition" = self.guard, "type" = self.source.resolvedType.elementName, "not" = false, "nodeNumber" = self.eContainer().name, "value" = "Yes", "two-path" = twoPath});
+				}
+				return true;
+			}
+			else {
+				if (PCExist(ifCondition, true) == "") {
+					IfGuard = false;
+					PC.add(Map{"condition" = self.guard, "type" = self.source.resolvedType.elementName, "not" = true, "nodeNumber" = self.eContainer().name, "value" = "No", "two-path" = twoPath});
+				}
+				return false;
+			}
+		}
+	}
+	else {
+		return true;
+	}
+}
+operation String isAttribute() : Boolean {
+	if (OUT_MM!EAttribute.allInstances()->collect(a|a.name)->includes(self)) {
+		return true;
+	}
+	else if (IN_MM!EAttribute.allInstances()->collect(a|a.name)->includes(self)) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+operation String isOperation() : Boolean {
+	if (ETL!OperationDefinition.allInstances()->exists(o|o.name.name = self)) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+operation CFG!EOLElement hasOperation() : Boolean {
+	var set : Sequence;
+	if (self.type().name == "MethodCallExpression") {
+		set = Sequence{self};
+	}
+	CFG!MethodCallExpression.allInstances()->collect(s|s.method.name);
+	set.add(CFG!MethodCallExpression.allInstances()->select(x|x.collectAllContainer().includes(self)).flatten());
+	for (elem in set.flatten) {
+		if (elem.method.name.isOperation()) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	return false;
+}
+operation CFG!EOLElement search(r : ETL!TransformationRule) : Any {
+	var class : Ecore!EClass;
+	switch (self.type().name) {
+		case "AssignmentStatement": {
+			switch (self.lhs.type().name) {
+				case "PropertyCallExpression": {
+					switch (self.lhs.property.name.isAttribute()) {
+						case true: {
+							class = searchType(self.lhs).getEClass();
+							var exist : Boolean = false;
+							var a;
+							for (e in class.eAttributes) {
+								if (e.name = self.lhs.property.name) {
+									exist = true;
+									a = e;
+								}
+							}
+							if (exist <> true) {
+								a = new Ecore!EAttribute;
+							}
+							a.name = self.lhs.property.name;
+							if (exist <> true) {
+								a.defaultValueLiteral = self.rhs.search(r).asString();
+								var attributeType = OUT_MM!EAttribute.allInstances()->select(e|e.eContainingClass = class and e.name = a.name)->collect(t|t.eType)->first();
+								a.eType = attributeType;
+								class.eAttributes.add(a);
+							}
+							else if (Ecore!EEnum.allInstances()->exists(a|a.name = self.lhs.target.name + "_" + self.lhs.property.name)) {
+								if (not Ecore!EEnumLiteral.allInstances()->exists(a|a.name = self.rhs.search(r) and a.eEnum.name = self.lhs.target.name + "_" + self.lhs.property.name)) {
+									var e = Ecore!EEnum.allInstances()->select(a|a.name = self.lhs.target.name + "_" + self.lhs.property.name)->first();
+									var e1 = new Ecore!EEnumLiteral;
+									e1.name = self.rhs.search(r);
+									e1.literal = self.rhs.search(r);
+									e.eLiterals.add(e1);
+								}
+							}
+							else if (not a.defaultValueLiteral.matches(self.rhs.search(r))) {
+								var e = new Ecore!EEnum;
+								e.name = self.lhs.target.name + "_" + self.lhs.property.name;
+								var e1 = new Ecore!EEnumLiteral;
+								e1.name = a.defaultValueLiteral;
+								e1.literal = a.defaultValueLiteral;
+								var e2 = new Ecore!EEnumLiteral;
+								e2.name = self.rhs.search(r);
+								e2.literal = self.rhs.search(r);
+								e.eLiterals.add(e1);
+								e.eLiterals.add(e2);
+								a.eType = Ecore!EEnum.all.select(a|a.name = self.lhs.target.name + "_" + self.lhs.property.name).first();
+								a.defaultValueLiteral = "";
+								package.eClassifiers.add(e);
+							}
+						}
+						case false: {
+							if (self.lhs.isTypeOf(ETL!PropertyCallExpression)) {
+								if (self.lhs.target.type().name == "PropertyCallExpression") {
+									var class1 = SymbolTable.lookup(searchTarget(self.lhs).name, "name")->collect(t|t.get("type"))->first();
+									class = OUT_MM!EClass.all.select(c|c.name = class1).first.eReferences.select(r|r.name = self.lhs.target.property.name).first.collect(e|e.eType).first;
+								}
+								else {
+									class = SymbolTable.lookup(self.lhs.target.name, "name")->collect(t|t.get("type"))->first().getEClass();
+								}
+								var exist : Boolean = false;
+								var a;
+								for (e in class.eReferences) {
+									if (e.name = self.lhs.property.name) {
+										exist = true;
+										a = e;
+									}
+								}
+								if (exist <> true) {
+									a = new Ecore!EReference;
+									SymbolTable.lookup(searchTarget(self.lhs).name, "name").get("type").getEClass().eReferences.add(a);
+									a.name = self.lhs.property.name;
+									var ref = OUT_MM!EReference.allInstances()->select(e|e.name = self.lhs.property.name)->first();
+									a.lowerBound = ref.lowerBound;
+									if (self.rhs.isKindOf(ETL!FeatureCallExpression) or self.rhs.isTypeOf(ETL!NameExpression)) {
+										a.eType = SymbolTable.lookup(searchTarget(self.rhs).name, "name").get("type").getEClass();
+									}
+									else if (self.rhs.isTypeOf(ETL!NewExpression)) {
+										var class = new Ecore!EClass;
+										class.name = self.rhs.resolvedType.elementName;
+										package.eClassifiers.add(class);
+										a.eType = class;
+									}
+								}
+							}
+							else {
+								SymbolTable.lookup(self.lhs.name, "name").put("value", ref.eType.name).getEClass();
+							}
+						}
+					}
+				}
+				case "NameExpression": {
+					SymbolTable.lookup(self.lhs.name, "name").put("value", self.rhs.search(r));
+				}
+				case "VariableDeclarationExpression": {
+					var newRecord;
+					if (self.rhs.type().name == "NewExpression") {
+						var class = new Ecore!EClass;
+						class.name = self.rhs.resolvedType.elementName;
+						package.eClassifiers.add(class);
+						newRecord = Map{"name" = self.lhs.name.name, "type" = self.rhs.resolvedType.elementName, "value" = self.rhs.resolvedType.elementName};
+					}
+					else {
+						newRecord = Map{"name" = self.lhs.name.name, "type" = self.lhs.resolvedType.type().name.substring(0, (self.lhs.resolvedType.type().name.length()) - 4), "value" = null};
+					}
+					SymbolTable.push(newRecord);
+				}
+			}
+		}
+		case "SpecialAssignmentStatement": {
+			switch (self.rhs.isTypeOf(ETL!PropertyCallExpression)) {
+				case true: {
+					var ref = IN_MM!EReference.allInstances()->select(e|e.name = self.rhs.property.name)->first();
+					if (self.lhs.isTypeOf(ETL!PropertyCallExpression)) {
+						class = SymbolTable.lookup(self.lhs.target.name, "name")->collect(t|t.get("type"))->first().getEClass();
+						var exist : Boolean = false;
+						var a;
+						for (e in class.eReferences) {
+							if (e.name = self.lhs.property.name) {
+								exist = true;
+								a = e;
+							}
+						}
+						if (exist <> true) {
+							a = new Ecore!EReference;
+							a.name = self.lhs.property.name;
+							SymbolTable.lookup(self.lhs.target.name, "name").get("type").getEClass().eReferences.add(a);
+						}
+						else {
+							a.name = self.lhs.property.name;
+						}
+						var d : Sequence;
+						d.add(ref.eType.name);
+						d.add(IN_MM!EClass.all.select(e|e.eSuperTypes.includes(ref.eType)).flatten()->collect(e|e.name));
+						var rules : Sequence = Sequence{};
+						rules.add(ETL!TransformationRule.all.select(t|t.isPrimary()));
+						rules.add(ETL!TransformationRule.all.select(t|not t.isPrimary()));
+						a.eType = rules.flatten->select(r|d.flatten.includes(r.source.resolvedType.elementName))->first().targets->first().resolvedType.elementName.getEClass();
+						a.containment = ref.containment;
+						a.upperBound = ref.upperBound;
+						a.lowerBound = ref.lowerBound;
+					}
+					else {
+						SymbolTable.lookup(self.lhs.name, "name").put("value", ETL!TransformationRule.allInstances()->select(r|r.source.resolvedType.elementName = ref.eType.name)->first().targets->first().resolvedType.elementName.getEClass());
+					}
+				}
+				case false: {
+					class = SymbolTable.lookup(self.lhs.name, "name")->collect(t|t.get("value"))->first();
+					var exist : Boolean = false;
+					var a;
+					for (e in class.eReferences) {
+						if (e.name = self.lhs.property.name) {
+							exist = true;
+							a = e;
+						}
+					}
+					if (exist <> true) {
+						var a : new Ecore!EReference;
+					}
+					a.name = self.lhs.property.name;
+					a.eReferenceType = self.rhs.resolvedType.elementName;
+				}
+			}
+		}
+		case "IfStatement": {
+			self.ConditionalStatement();
+		}
+		case "ExpressionStatement": {
+			self.expression.search(r);
+		}
+		case "VariableDeclarationExpression": {
+			var newRecord : Map;
+			if (self.create = true or self.resolvedType.type().name = "ModelElementType") {
+				var v = null;
+				if (SymbolTable.lookup(self.resolvedType.elementName, "type") == null and not Traceability_Linkes->exists(c|c.get("target") == self.resolvedType.elementName)) {
+					v = new Ecore!EClass;
+					v.name = self.resolvedType.elementName;
+					package.eClassifiers.add(v);
+				}
+				newRecord = Map{"name" = self.name.name, "type" = self.resolvedType.elementName, "value" = v};
+			}
+			else {
+				newRecord = Map{"name" = self.name.name, "type" = self.resolvedType.type().name.substring(0, (self.resolvedType.type().name.length()) - 4), "value" = null};
+			}
+			SymbolTable.push(newRecord);
+		}
+		case "PlusOperatorExpression": {
+			return self.lhs.search(r) + self.rhs.search(r);
+		}
+		case "PropertyCallExpression": {
+			if (self.property.name.isAttribute() or (not self.property.name.isAttribute() and self.eContainer().isTypeOf(ETL!PropertyCallExpression) and self.eContainer().property.name.isAttribute())) {
+				var target : String;
+				if (self.target.type().name == "NameExpression") {
+					if (self.target.name <> "self") {
+						target = SymbolTable.lookup(self.target.name, "name").get("type");
+					}
+					else {
+						target = self.target.collectAllContainer()->select(l|l.type().name = "OperationDefinition")->first().contextType.elementName;
+					}
+				}
+				else {
+					target = self.target.search(r);
+				}
+				return target + "." + self.property.search(r);
+			}
+			else {
+				var ref = IN_MM!EReference.allInstances()->select(e|e.name = self.property.name)->first();
+				if (ref.isDefined()) {
+					return ref.eType.name;
+				}
+				else {
+					var contain = self.eContainer();
+					while (not (contain.type().name == "AssignmentStatement")){
+						contain = contain.eContainer();
+						if (contain.type().name == "Node") {
+							break;
+						}
+					}
+					if (contain.lhs.type().name == "NameExpression") {
+						return SymbolTable.lookup(contain.lhs.name, "name").get("type");
+					}
+				}
+			}
+		}
+		case "StringExpression": {
+			return self.value;
+		}
+		case "BooleanExpression": {
+			return self.value;
+		}
+		case "IntegerExpression": {
+			return self.value;
+		}
+		case "EnumerationLiteralExpression": {
+			return self.literal.name;
+		}
+		case "MethodCallExpression": {
+			switch (self.method.name.isOperation()) {
+				case true: {
+					if (adjucent.visited == true) {
+						return ret;
+					}
+					while (DFS.peek().EOLElement.type().name <> "ReturnStatement"){
+						adjucent = DFS.peek().getAdjucent();
+						if (SymbolTable.get("items").notEmpty() and DFS.peek().type().name <> "TransformationRule" and (not (DFS.peek().EOLElement.type().name == "StringExpression" and DFS.peek().EOLElement.value.startsWith("Check TraceabilityLink"))) and DFS.peek().outgoing.select(c|c.incoming.size > 1).size > 0 and adjucent.visited == true) {
+							var size = DFS.peek().outgoing.select(c|c.incoming.size > 1).first.incoming.select(c|c.visited == false and c.name.asInteger() < DFS.peek().name.asInteger()).size;
+							if (DFS.peek().outgoing.select(c|c.incoming.size > 1).first.incoming.exists(c|c.visited == false and c.name.asInteger() > DFS.peek().name.asInteger())) {
+								size = size + 1;
+							}
+							else if (size == 0) {
+								size = 1;
+							}
+							var i = 0;
+							while (i < size){
+								SymbolTable.popScope();
+								i++;
+							}
+						}
+						if (DFS.peek().EOLElement.type().name == "ReturnStatement" and DFS.peek().EOLElement.collectAllContainer().exists(c|c.isOperation())) {
+							SymbolTable.popScope();
+						}
+						if (adjucent.name == "end") {
+							"It is the end".println();
+							if (PC.isEmpty()) {
+								adjucent.visited = true;
+								while (DFS.get("top") <> -1){
+									DFS.pop();
+								}
+							}
+							else {
+								var cPC = PC.clone();
+								while (not cPC.isEmpty() and cPC.last().get("two-paths") == false){
+									PC.removeAt(PC.size() - 1);
+									cPC = PC.clone();
+								}
+								if (not PC.isEmpty()) {
+									var DFS1 = DFS.clone();
+									while (DFS1.get("top") <> -1 and DFS1.peek().name <> PC.last().get("nodeNumber")){
+										DFS.pop();
+										DFS1 = DFS.clone();
+									}
+									PC.last().put("two-paths", false);
+									var temp = MappingTable.select(c|c.get("nodeNumber") = DFS.peek().name).first;
+									if (temp.isDefined()) {
+										packageCounter++;
+										package = new Ecore!EPackage;
+										package.name = "Target" + packageCounter;
+										SymbolTable.put("items", temp.get("SymbolTableItems").clone());
+										SymbolTable.put("top", temp.get("SymbolTableItems").size - 1);
+										selectedRules = temp.get("selectedRules").clone();
+										if (temp.get("Traceabilitylink").isDefined()) {
+											Traceability_Linkes = temp.get("Traceabilitylink").clone();
+										}
+										else {
+											Traceability_Linkes = Sequence{};
+										}
+										var ecoreUtil = emfTool.ecoreUtil;
+										var source = temp.get("outputModel");
+										var copy = emfTool.getECoreUtil().copy(temp.get("outputModel"));
+										var s = Ecore!EPackage.all.select(p|p.name = "Target" + packageCounter).first();
+										for (c in source.eClassifiers) {
+											var targetCloneable = ecoreUtil.copy(c);
+											s.eClassifiers.add(targetCloneable);
+										}
+										for (c in source.eAnnotations) {
+											var targetCloneable = ecoreUtil.copy(c);
+											s.eAnnotations.add(targetCloneable);
+										}
+									}
+								}
+							}
+						}
+						else if (adjucent.EOLElement.type().name == "OperationDefinition") {
+							SymbolTable.push(Map{"name" = null});
+							for (param in ETL!OperationDefinition.allInstances()->select(o|o.name = self.method.name)->collect(p|p.parameters)) {
+								if (param.resolvedType.type().name == "ModelElementType") {
+									SymbolTable.push(Map{"name" = param.name.name, "type" = param.resolvedType.elementName, "value" = ""});
+								}
+								else {
+									SymbolTable.push(Map{"name" = param.name.name, "type" = param.type().name, "value" = ""});
+								}
+							}
+						}
+						else {
+							ret = adjucent.EOLElement.search(null);
+						}
+						adjucent.visited = true;
+						DFS.push(adjucent);
+					}
+					return ret;
+				}
+				case false: {
+					switch (self.method.name) {
+						case "add": {
+							class = SymbolTable.lookup(searchTarget(self.target).name, "name")->collect(t|t.get("type"))->first().getEClass();
+							var exist : Boolean = false;
+							var a;
+							var eType;
+							for (arg in self.arguments) {
+								if (arg.type().name <> "MethodCallExpression") {
+									eType = SymbolTable.lookup(searchTarget(arg).name, "name").get("type").getEClass();
+								}
+								else {
+									eType = arg.search(r);
+								}
+							}
+							for (e in class.eReferences) {
+								if (e.name = self.target.property.name and e.eType = eType) {
+									exist = true;
+									a = e;
+								}
+							}
+							if (exist <> true) {
+								a = new Ecore!EReference;
+							}
+							a.name = self.target.property.name;
+							SymbolTable.lookup(searchTarget(self.target).name, "name").get("type").getEClass().eReferences.add(a);
+							a.eType = eType;
+							var ref = OUT_MM!EReference.allInstances()->select(e|e.name = a.name)->first();
+							a.containment = ref.containment;
+							a.upperBound = ref.upperBound;
+						}
+						case "firstToLowerCase": {
+							var cond = self.target.search(r) + ".firstToLowerCase()";
+							return cond;
+						}
+						case "firstToUpperCase": {
+							var cond = self.target.search(r) + ".firstToUpperCase()";
+							return cond;
+						}
+						case "toLowerCase": {
+							return self.target.search(r) + ".toLowerCase()";
+						}
+						case "first": {
+							var a = self.target.search(r);
+							if (a.isKindOf(Collection)) {
+								return self.target.search(r).first();
+							}
+							else {
+								return self.target.search(r);
+							}
+						}
+						case "equivalent": {
+							var rules : Sequence = Sequence{};
+							rules.add(ETL!TransformationRule.all.select(t|t.isPrimary()));
+							rules.add(ETL!TransformationRule.all.select(t|not t.isPrimary()));
+							switch (self.target.isTypeOf(CFG!PropertyCallExpression)) {
+								case true: {
+									var ref = IN_MM!EReference.allInstances()->select(e|e.name = self.target.property.name)->first();
+									return rules.flatten->select(r|ref.eType.name.getSubTypes().flatten().includes(r.source.resolvedType.elementName))->first().targets->first().resolvedType.elementName.getEClass();
+								}
+								case false: {
+									class = SymbolTable.lookup(searchTarget(self.target).name, "name")->collect(t|t.get("type"))->first().getInputClass();
+									return rules.flatten->select(r|r.source.resolvedType.elementName = class.name)->first().targets->first().resolvedType.elementName.getEClass();
+								}
+							}
+						}
+						case "equivalents": {
+							switch (self.target.isTypeOf(CFG!PropertyCallExpression)) {
+								case true: {
+									var ref = IN_MM!EReference.allInstances()->select(e|e.name = self.target.property.name)->first();
+									return rules.flatten->select(r|r.source.resolvedType.elementName = ref.eType.name)->collect(c|c.targets)->collect(c|c.resolvedType.elementName.getEClass());
+								}
+								case false: {
+									class = SymbolTable.lookup(searchTarget(self.target).name, "name")->collect(t|t.get("type"))->first().getInputClass();
+									return rules.flatten->select(r|r.source.resolvedType.elementName = class.name)->collect(r|r.targets)->flatten()->collect(c|c.resolvedType.elementName.getEClass());
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		case "NameExpression": {
+			var op = self.collectAllContainer()->select(l|l.type().name = "OperationDefinition")->first();
+			if (self.name = "self" and op <> "") {
+				return op.contextType.elementName;
+			}
+			else {
+				return self.name;
+			}
+		}
+		case "ReturnStatement": {
+			return self.expression.search(r);
+		}
+		case "ForStatement": {
+			self.ConditionalStatement();
+		}
+		case "WhileStatement": {
+			self.ConditionalStatement();
+		}
+		case "NotOperatorExpression": {
+			return not self.expression.search(r);
+		}
+		default: {
+			self.type().println();
+		}
+	}
+}
+operation String includesKind(inc : String) : Boolean {
+	var a : Sequence;
+	a.add(self);
+	a.add(self.getEClass().eSuperTypes->collect(e|e.name));
+	return a.includes(inc);
+}
+operation Any getSubTypes() : Any {
+	var a : OrderedSet;
+	a.add(self);
+	for (class in IN_MM!EClass.all) {
+		if (class.eSuperTypes.name.includes(self)) {
+			a.add(class.name.getSubTypes().flatten);
+		}
+	}
+	return a.flatten;
+}
+operation ETL!EOLElement collectAllContainedElementsName() : Sequence(OclAny) {
+	var s : Sequence = Sequence{};
+	for (elem in ETL!NameExpression.allInstances()->select(x|x.collectAllContainer().includes(self)).flatten()) {
+		if (elem.container.type().name == "MethodCallExpression") {
+			if (elem.container.method == elem) {
+				s.add(elem.name + "()");
+			}
+			else {
+				s.add(elem.name);
+			}
+		}
+		else {
+			s.add(elem.name);
+		}
+	}
+	return s;
+}
+operation CFG!EOLElement collectAllContainer() : Sequence(OclAny) {
+	var contain : Sequence = Sequence{self.container};
+	if (self.container.isUndefined()) {
+		contain = Sequence{};
+	}
+	else {
+		contain.add(self.container.collectAllContainer());
+	}
+	return contain.flatten()->reject(x|x.isUndefined());
+}
+operation CFG!EOLElement selectRule() : Any {
+	if (self.type().name == "TransformationRule") {
+		return self.name.name;
+	}
+	else if (self.type().name == "StringExpression" and self.value.startsWith("Check TraceabilityLink")) {
+		return self.value.substring(27);
+	}
+	else {
+		for (ref in self.eContainer().incoming.select(i|i.name.asInteger() < self.eContainer().name.asInteger())) {
+			return ref.EOLElement.selectRule();
+		}
+	}
+}
+operation String getEClass() : Ecore!EClass {
+	return Ecore!EPackage.all.select(p|p.name = "Target" + packageCounter).first.eClassifiers.select(c|c.name = self).first();
+}
+operation String getInputClass() : Ecore!EClass {
+	return IN_MM!EClass.allInstances().select(c|c.name = self).first();
+}
+operation ETL!EOLElement searchReferenceProperty() : String {
+	switch (self.type().name) {
+		case "MethodCallExpression": {
+			if (self.method.name == "isDefined" or self.method.name == "isUndefined") {
+				return self.target.property.name;
+			}
+		}
+		case "PropertyCallExpression": {
+			return self.property.name;
+		}
+		case "NotOperatorExpression": {
+			return self.expression.searchReferenceProperty();
+		}
+		case "ExpressionOrStatementBlock": {
+			return self.expression.searchReferenceProperty();
+		}
+		case "EqualsOperatorExpression": {
+			return self.lhs.searchReferenceProperty();
+		}
+		default: {
+			return null;
+		}
+	}
+}
+operation searchTarget(t : ETL!EOLElement) : ETL!EOLElement {
+	switch (t.type().name) {
+		case "PropertyCallExpression": {
+			while (t.type().name == "PropertyCallExpression"){
+				t = t.target;
+			}
+			return searchTarget(t);
+		}
+		case "MethodCallExpression": {
+			return searchTarget(t.target);
+		}
+		case "NotEqualsOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "EqualsOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "GreaterThanOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "LessThanOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "LessThanOrEqualToOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "GreaterThanOrEqualToOperatorExpression": {
+			return searchTarget(t.lhs);
+		}
+		case "NameExpression": {
+			return t;
+		}
+		case "NotOperatorExpression": {
+			return searchTarget(t.expression);
+		}
+		case "ExpressionOrStatementBlock": {
+			return searchTarget(t.expression);
+		}
+		case "FormalParameterExpression": {
+			return t.resolvedType;
+		}
+	}
+}
+operation Map push(data : Map) : Boolean {
+	self.put("top", self.get("top") + 1);
+	self.get("items").add(data);
+}
+operation Map pop() : Map {
+	var data = self.get("items").at(self.get("top"));
+	self.put("top", self.get("top") - 1);
+	return data;
+}
+operation Map peek() : Any {
+	return self.get("items").at(self.get("top"));
+}
+operation Map lookup(data : String, kind : String) : Any {
+	var temp : Integer = self.get("top");
+	if (temp <> -1) {
+		while (temp <> -1 and data <> self.get("items").at(temp).get(kind)){
+			temp = temp - 1;
+		}
+		if (temp <> -1) {
+			return self.get("items").at(temp);
+		}
+		else {
+			return null;
+		}
+	}
+	else {
+		return null;
+	}
+}
+operation Sequence lookupTrace(data : String, kind : String) : Any {
+	var temp : Integer = self.get("top");
+	if (temp <> -1) {
+		while (data <> self.at(temp).get(kind)){
+			temp = temp - 1;
+		}
+		return self.at(temp);
+	}
+	else {
+		return null;
+	}
+}
+operation Map popScope() {
+	while (self.peek().get("name") <> null){
+		self.get("items").removeAt(self.get("top"));
+		self.put("top", self.get("top") - 1);
+	}
+	self.get("items").removeAt(self.get("top"));
+	self.put("top", self.get("top") - 1);
+}
+operation etl2atl(exp : CFG!Expression) : Any {
+	switch (exp.type().name) {
+		case "PropertyCallExpression": {
+			var ocl = new ATLOutput!NavigationOrAttributeCallExp;
+			ocl.name = exp.property.name;
+			etl2atl(exp.target).appliedProperty = ocl;
+			return ocl;
+		}
+		case "NameExpression": {
+			var ocl = new ATLOutput!VariableExp;
+			ocl.referredVariable = it;
+			return ocl;
+		}
+		case "StringExpression": {
+			var ocl = new ATLOutput!StringExp;
+			ocl.stringSymbol = exp.value;
+			return ocl;
+		}
+		case "IntegerExpression": {
+			var ocl = new ATLOutput!IntegerExp;
+			ocl.integerSymbol = exp.value;
+			return ocl;
+		}
+		case "BooleanExpression": {
+			var ocl = new ATLOutput!BooleanExp;
+			ocl.booleanSymbol = exp.value;
+			return ocl;
+		}
+		case "NotOperatorExpression": {
+			if (exp.expression.type().name == "MethodCallExpression") {
+				if (exp.expression.method.name == "isDefined") {
+					var ocl = new ATLOutput!OperationCallExp;
+					ocl.operationName = "oclIsUndefined";
+					etl2atl(exp.expression.target).appliedProperty = ocl;
+					return ocl;
+				}
+				else if (exp.expression.method.name == "isUndefined") {
+					var ocl = new ATLOutput!OperationCallExp;
+					ocl.operationName = exp.expression.method.name;
+					var notOp = new ATLOutput!OperatorCallExp;
+					notOp.operationName = "not";
+					ocl.operationName = "oclIsUndefined";
+					ocl.appliedProperty = notOp;
+					etl2atl(exp.expression.target).appliedProperty = ocl;
+					return notOp;
+				}
+			}
+			else {
+				var notOp = new ATLOutput!OperatorCallExp;
+				notOp.operationName = "not";
+				etl2atl(exp.expression).appliedProperty = notOp;
+				return notOp;
+			}
+		}
+		case "MethodCallExpression": {
+			var condition : Sequence;
+			if (exp.method.name.isOperation()) {
+				for (s in ETL!OperationDefinition.allInstances()->select(o|o.name.name = exp.method.name)->first().body.statements) {
+					if (s.type().name == "IfStatement") {
+						if (s.returnTrue()) {
+							condition.add(s.condition);
+							break;
+						}
+					}
+				}
+				var i = 0;
+				if (condition.size == 1) {
+					return etl2atl(condition.first);
+				}
+				else {
+					for (c in condition) {
+						if (i > 0) {
+							var ocl : ATL!OperatorCallExp;
+							ocl.operationName = "and";
+							ocl.rhs = c.get(i - 1);
+							ocl.lhs = c.get(i);
+						}
+						i++;
+					}
+					return ocl;
+				}
+			}
+			else if (exp.method.name == "isDefined") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = exp.method.name;
+				var notOp = new ATLOutput!OperatorCallExp;
+				notOp.operationName = "not";
+				ocl.operationName = "oclIsUndefined";
+				ocl.appliedProperty = notOp;
+				etl2atl(exp.target).appliedProperty = ocl;
+				return notOp;
+			}
+			else if (exp.method.name == "isUndefined") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "oclIsUndefined";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "eContainer") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "refImmediateComposite";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "asInteger") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "toInteger";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "length") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "size";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "isTypeOf") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "oclIsTypeOf";
+				etl2atl(exp.target).appliedProperty = ocl;
+				var arg = new ATLOutput!OclModelElement;
+				arg.name = exp.arguments.at(0).name.split("!").at(1);
+				arg.parentOperation = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "isKindOf") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "oclIsKindOf";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "size") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "size";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+			else if (exp.method.name == "all" or exp.method.name == "allInstances") {
+				var ocl = new ATLOutput!OperationCallExp;
+				ocl.operationName = "allInstances";
+				etl2atl(exp.target).appliedProperty = ocl;
+				return ocl;
+			}
+		}
+		case "FormalParameterExpression": {
+			var ocl1 = new ATLOutput!OperationCallExp;
+			ocl1.operationName = "allInstances";
+			var ocl = new ATLOutput!VariableExp;
+			ocl.referredVariable = it;
+			ocl.appliedProperty = ocl1;
+			return ocl1;
+		}
+		case "NotEqualsOperatorExpression": {
+			if (exp.rhs.type().name == "NameExpression") {
+				if (exp.rhs.name <> "null") {
+					var ocl = new ATLOutput!OperatorCallExp;
+					ocl.operationName = "<>";
+					etl2atl(exp.lhs).appliedProperty = ocl;
+					etl2atl(exp.rhs).parentOperation = ocl;
+					return ocl;
+				}
+				else {
+					var notOp = new ATLOutput!OperatorCallExp;
+					notOp.operationName = "not";
+					var ocl = new ATLOutput!OperationCallExp;
+					ocl.operationName = "oclIsUndefined";
+					etl2atl(exp.lhs).appliedProperty = ocl;
+					ocl.appliedProperty = notOp;
+					return notOp;
+				}
+			}
+			else if (exp.rhs.type().name == "StringExpression") {
+				var ocl = new ATLOutput!OperatorCallExp;
+				ocl.operationName = "<>";
+				etl2atl(exp.lhs).appliedProperty = ocl;
+				etl2atl(exp.rhs).parentOperation = ocl;
+				return ocl;
+			}
+		}
+		case "EqualsOperatorExpression": {
+			if (exp.rhs.type().name == "NameExpression") {
+				if (exp.rhs.name <> "null") {
+					var ocl = new ATLOutput!OperatorCallExp;
+					ocl.operationName = "==";
+					etl2atl(exp.lhs).appliedProperty = ocl;
+					etl2atl(exp.rhs).parentOperation = ocl;
+					return ocl;
+				}
+				else {
+					var ocl = new ATLOutput!OperationCallExp;
+					ocl.operationName = "oclIsUndefined";
+					etl2atl(exp.lhs).appliedProperty = ocl;
+					return ocl;
+				}
+			}
+			else if (exp.rhs.type().name == "StringExpression" or exp.rhs.type().name == "IntegerExpression" or exp.rhs.type().name == "BooleanExpression") {
+				var ocl = new ATLOutput!OperatorCallExp;
+				ocl.operationName = "=";
+				etl2atl(exp.lhs).appliedProperty = ocl;
+				etl2atl(exp.rhs).parentOperation = ocl;
+				return ocl;
+			}
+			else if (exp.rhs.type().name == "EnumerationLiteralExpression") {
+				var ocl = new ATLOutput!OperatorCallExp;
+				ocl.operationName = "=";
+				etl2atl(exp.lhs).appliedProperty = ocl;
+				etl2atl(exp.rhs).parentOperation = ocl;
+				return ocl;
+			}
+		}
+		case "GreaterThanOperatorExpression": {
+			var ocl = new ATLOutput!OperatorCallExp;
+			ocl.operationName = ">";
+			etl2atl(exp.lhs).appliedProperty = ocl;
+			etl2atl(exp.rhs).parentOperation = ocl;
+			return ocl;
+		}
+		case "LessThanOperatorExpression": {
+			var ocl = new ATLOutput!OperatorCallExp;
+			ocl.operationName = "<";
+			etl2atl(exp.lhs).appliedProperty = ocl;
+			etl2atl(exp.rhs).parentOperation = ocl;
+			return ocl;
+		}
+		case "GreaterThanOrEqualToOperatorExpression": {
+			var ocl = new ATLOutput!OperatorCallExp;
+			ocl.operationName = ">=";
+			etl2atl(exp.lhs).appliedProperty = ocl;
+			etl2atl(exp.rhs).parentOperation = ocl;
+			return ocl;
+		}
+		case "LessThanOrEqualToOperatorExpression": {
+			var ocl = new ATLOutput!OperatorCallExp;
+			ocl.operationName = "<=";
+			etl2atl(exp.lhs).appliedProperty = ocl;
+			etl2atl(exp.rhs).parentOperation = ocl;
+			return ocl;
+		}
+		case "EnumerationLiteralExpression": {
+			var ocl = new ATLOutput!EnumLiteralExp;
+			ocl.name = exp.literal.name;
+			return ocl;
+		}
+	}
+}
+operation searchType(exp : ETL!EOLElement) : String {
+	if (exp.isKindOf(ETL!FeatureCallExpression)) {
+		if (searchTarget(exp.target).name == "self") {
+			return exp.collectAllContainer()->select(l|l.type().name = "OperationDefinition")->first().contextType.elementName;
+		}
+		else if (SymbolTable.lookup(searchTarget(exp.target).name, "name") <> null) {
+			return SymbolTable.lookup(searchTarget(exp.target).name, "name").get("type");
+		}
+		else {
+			var target = searchTarget(exp.target).name;
+			if (target.toCharSequence().count("!") <> 0) {
+				return target.substring(target.indexOf("!") + 1, target.length());
+			}
+			else {
+				return null;
+			}
+		}
+	}
+	else if (exp.isKindOf(ETL!ExpressionOrStatementBlock) or exp.isTypeOf(ETL!NotOperatorExpression)) {
+		return searchType(exp.expression);
+	}
+	else if (exp.isTypeOf(ETL!NotEqualsOperatorExpression) or exp.isTypeOf(ETL!EqualsOperatorExpression) or exp.isTypeOf(ETL!GreaterThanOperatorExpression) or exp.isTypeOf(ETL!LessThanOperatorExpression) or exp.isTypeOf(ETL!LessThanOrEqualToOperatorExpression) or exp.isTypeOf(ETL!GreaterThanOrEqualToOperatorExpression)) {
+		return searchType(exp.lhs);
+	}
+}
+operation ETL!IfStatement returnTrue() : Boolean {
+	if (self.ifBody.block.statements->exists(s|s.type().name == "IfStatement")) {
+		self.ifBody.returnTrue();
+	}
+	else {
+		return self.ifBody.block.statements->select(s|s.type().name == "ReturnStatement")->first().expression.value;
+	}
+}
+operation PCExist(condition : String, guard : Boolean) : String {
+	var condition1;
+	for (p in PC) {
+		if (guard) {
+			condition1 = prepareCondition(p.get("condition"), true);
+		}
+		else {
+			condition1 = prepareCondition(p.get("condition"), false);
+		}
+		if (condition1 == condition) {
+			return p.get("value");
+		}
+		else if (condition1 == "not " + condition or "not " + condition1 == condition or condition1.replace("isDefined", "isUndefined") == condition or condition.replace("isDefined", "isUndefined") == condition1) {
+			if (p.get("value") == "Yes") {
+				return "No";
+			}
+			else {
+				return "Yes";
+			}
+		}
+		else if (condition.toCharSequence().count("!") <> 0 and condition.indexOf("!") < condition.indexOf(".") and condition.substring(condition.indexOf("!") + 1, condition.indexOf(".")) == condition1) {
+			return p.get("value");
+		}
+	}
+	return "";
+}
+operation prepareCondition(condition : CFG!EOLElement, guard : Boolean) : String {
+	if (condition.type().name == "FormalParameterExpression") {
+		var cond : String = condition.eContainer().eContainer().EOLElement.source.resolvedType.elementName + ".size()>0";
+		return condition.eContainer().eContainer().EOLElement.source.resolvedType.elementName;
+	}
+	if (condition.type().name == "ExpressionOrStatementBlock") {
+		condition = condition.expression;
+	}
+	var ifCondition : String = model2code.print(condition);
+	ifCondition = ifCondition.replace("\n", "");
+	var target : ETL!EOLElement = searchTarget(condition);
+	var type;
+	if ((guard == true) or (searchType(condition) == null)) {
+		type = condition.eContainer().eContainer().source.resolvedType.elementName;
+	}
+	else {
+		type = searchType(condition);
+	}
+	var i : Integer;
+	for (c in ifCondition.toCharSequence()) {
+		if (c == ".") {
+			break;
+		}
+		i++;
+	}
+	if (condition.type().name == "NotOperatorExpression") {
+		ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, i).replace(target.name, type) + ifCondition.substring(i, ifCondition.length());
+	}
+	else {
+		ifCondition = ifCondition.substring(0, i).replace(target.name, type) + ifCondition.substring(i, ifCondition.length());
+	}
+	return ifCondition;
+}
+operation CFG!EOLElement ConditionalStatement() {
+	var r = self.selectRule();
+	var condition;
+	if (self.type().name == "IfStatement" or self.type().name == "ForStatement" or self.type().name == "WhileStatement") {
+		condition = self.condition;
+	}
+	else {
+		condition = self.source;
+	}
+	var ifCondition : String;
+	if (self.type().name == "IfStatement" or self.type().name == "ForStatement" or self.type().name == "WhileStatement") {
+		ifCondition = model2code.print(condition);
+		ifCondition = ifCondition.replace("\n", "");
+		var target : ETL!EOLElement = searchTarget(condition);
+		var i : Integer;
+		for (c in ifCondition.toCharSequence()) {
+			if (c == ".") {
+				break;
+			}
+			i++;
+		}
+		if (condition.type().name == "NotOperatorExpression") {
+			ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, i).replace(target.name, searchType(condition)) + ifCondition.substring(i, ifCondition.length());
+		}
+		else if (not (condition.type().name == "MethodCallExpression" and Bag{"all", "allInstances"}.includes(condition.method.name))) {
+			ifCondition = ifCondition.substring(0, i).replace(target.name, searchType(condition)) + ifCondition.substring(i, ifCondition.length());
+		}
+	}
+	else {
+		ifCondition = condition.resolvedType.elementName;
+	}
+	var ifc : String;
+	var twoPath : Boolean = false;
+	PCExist(ifCondition, false);
+	if (PCExist(ifCondition, false) <> "") {
+		ifc = PCExist(ifCondition, false);
+	}
+	else {
+		var tempPC : Sequence = PC.clone();
+		var tempPC_Satisfy : String;
+		var not_tempPC_Satisfy : String;
+		if (self.type().name == "IfStatement" or self.type().name == "WhileStatement") {
+			tempPC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = false});
+		}
+		else if (self.type().name == "ForStatement") {
+			tempPC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = false, "for" = true});
+		}
+		else {
+			tempPC.add(Map{"condition" = condition, "type" = condition.resolvedType.elementName, "not" = false, "value" = "Yes", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = true});
+		}
+		tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+		tempPC.removeAt(tempPC.size() - 1);
+		if (self.type().name == "IfStatement" or self.type().name == "WhileStatement") {
+			tempPC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = false});
+		}
+		else if (self.type().name == "ForStatement") {
+			tempPC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = false, "for" = true});
+		}
+		else {
+			tempPC.add(Map{"condition" = condition, "type" = condition.resolvedType.elementName, "not" = true, "value" = "No", "two-paths" = true, "nodeNumber" = self.eContainer().name, "rule" = true});
+		}
+		not_tempPC_Satisfy = ConstraintSolver1(tempPC, false);
+		if (tempPC_Satisfy == "Satisfiable" and not_tempPC_Satisfy == "Satisfiable") {
+			twoPath = true;
+			if (mode == "Automatic") {
+				if (self.eContainer().outgoing[0].visited == false) {
+					ifc = "Yes";
+				}
+				else {
+					ifc = "No";
+				}
+			}
+			else if (self.type().name = "ForStatement") {
+				ifc = interfaceRule.callGuard(prepareCondition(self.condition, false) + ".allInstances() -> size() <> 0", false, r);
+			}
+			else {
+				ifc = interfaceRule.callGuard(ifCondition, false, r);
+			}
+		}
+		else if (tempPC_Satisfy == "Satisfiable") {
+			ifc = "Yes";
+		}
+		else if (not_tempPC_Satisfy == "Satisfiable") {
+			ifc = "No";
+		}
+		else {
+			throw "UnSatisfiable Path!";
+		}
+	}
+	switch (ifc) {
+		case "Yes": {
+			IfGuard = true;
+			if (self.type().name <> "TransformationRule") {
+				SymbolTable.push(Map{"name" = null});
+			}
+			if (self.type().name == "ForStatement") {
+				SymbolTable.push(Map{"name" = self.iterator.name.name, "type" = self.condition.search(null), "value" = ""});
+			}
+			if (PCExist(ifCondition, false) == "") {
+				if (self.type().name == "IfStatement" or self.type().name == "WhileStatement") {
+					PC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = false});
+				}
+				else if (self.type().name == "ForStatement") {
+					PC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = false, "value" = "Yes", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = false, "for" = true});
+				}
+				else {
+					PC.add(Map{"condition" = condition, "type" = condition.resolvedType.elementName, "not" = false, "value" = "Yes", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = true});
+				}
+			}
+		}
+		case "No": {
+			IfGuard = false;
+			if (self.type().name == "IfStatement") {
+				SymbolTable.push(Map{"name" = null});
+			}
+			if (PCExist(ifCondition, false) == "") {
+				if (self.type().name == "IfStatement" or self.type().name == "WhileStatement") {
+					PC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = false});
+				}
+				else if (self.type().name == "ForStatement") {
+					PC.add(Map{"condition" = condition, "type" = searchType(condition), "not" = true, "value" = "No", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = false, "for" = true});
+				}
+				else {
+					PC.add(Map{"condition" = condition, "type" = condition.resolvedType.elementName, "not" = true, "value" = "No", "two-paths" = twoPath, "nodeNumber" = self.eContainer().name, "rule" = true});
+				}
+			}
+		}
+	}
+	if (self.eContainer().visited == false) {
+		var source = Ecore!EPackage.all.select(p|p.name = "Target" + packageCounter).first;
+		var copy = emfTool.getECoreUtil().copy(source);
+		MappingTable.add(Map{"nodeNumber" = self.eContainer().name, "SymbolTableItems" = SymbolTable.get("items").clone(), "TraceabilityLink" = Traceability_Linkes.clone(), "outputModel" = copy, "selectedRules" = selectedRules.clone()});
+	}
+	return;
+}
+operation MetamodelConformance() : String {
+	var Allmessage : Sequence = Sequence{};
+	var counter : Integer = 1;
+	for (package in Ecore!EPackage.all.select(p|p.name <> "Target")) {
+		var message : String = "";
+		for (eclass in package.eClassifiers.select(c|not (c.type().name == "EEnum"))) {
+			var OutMMclass = OUT_MM!EPackage.all.eClassifiers.flatten().select(c|c.name = eclass.name).first;
+			if (OutMMclass.size() == 0) {
+				message = message + "The " + eclass.name + " class was not found in the target metamodel. \n";
+			}
+			else {
+				var classAndParents : Sequence;
+				classAndParents.add(OutMMclass);
+				var super = OutMMclass.eSuperTypes;
+				while (super.notEmpty()){
+					classAndParents.add(super.clone());
+					super = super.eSuperTypes.flatten.clone();
+				}
+				for (attribute in eclass.getEStructuralFeatures()->select(e|e.type().name = "EAttribute")) {
+					if (not classAndParents.collect(c|c.eStructuralFeatures).flatten->select(e|e.type().name = "EAttribute").collect(a|a.name).includes(attribute.name)) {
+						message = message + "The " + attribute.name + " attribute with these properties was not found in the " + OutMMclass.name + ".\n";
+					}
+				}
+				for (reference in eclass.getEStructuralFeatures()->select(e|e.type().name = "EReference")) {
+					if (not classAndParents.collect(c|c.eStructuralFeatures).flatten->select(e|e.type().name = "EReference" and not (reference.lowerBound < e.lowerBound) and (e.upperBound == -1 or (e.upperBound <> -1 and not (reference.upperBound > e.upperBound)))).collect(a|a.name).includes(reference.name)) {
+						message = message + "The " + reference.name + " reference with these properties was not found in the " + OutMMclass.name + ".\n";
+					}
+				}
+			}
+		}
+		counter = counter + 1;
+		Allmessage.add(message);
+	}
+	var count : Integer = 1;
+	var FinalMessage : String = "";
+	for (m in Allmessage) {
+		if (m <> "") {
+			FinalMessage = FinalMessage + "Target" + count + "\n" + m + "\n";
+		}
+		count = count + 1;
+	}
+	return FinalMessage;
+}
+operation ConstraintSolver1(PC : Sequence, end : Boolean) : Any {
+	it = "";
+	var classRef;
+	var Satisfy : Boolean = true;
+	var l : Integer;
+	var notContainRef : Integer;
+	var allContainRef : Integer;
+	var PCString : String = "";
+	var c1 : Sequence;
+	var IteratorExp;
+	var contain : Boolean = false;
+	delete ATLOutput!IteratorExp->allInstances();
+	delete ATLOutput!OclModel->allInstances();
+	delete ATLOutput!OperatorCallExp->allInstances();
+	delete ATLOutput!NavigationOrAttributeCallExp.all;
+	delete ATLOutput!VariableExp.all;
+	ATLOutput.clearCache();
+	delete ATLOutput!IteratorExp->allInstances();
+	if (PC <> Sequence{}) {
+		for (eclass in IN_MM!EClass.allInstances()) {
+			l = 0;
+			notContainRef = 0;
+			for (p in PC) {
+				if (p.get("rule") <> true) {
+					if (p.get("type") == eclass.name) {
+						if (eclass.eAllReferences->select(r|r.eOpposite.isDefined() and r.eOpposite.containment = true and r.eType.name <> eclass.name)->collect(r|r.name).includes(p.get("condition").searchReferenceProperty())) {
+							contain = true;
+							if ((p.get("not") == false and p.get("condition").type.name <> "NotOperatorExpression" and p.get("condition").method.name == "isDefined") or (p.get("not") == true and p.get("condition").type.name == "NotOperatorExpression" and p.get("condition").method.name == "isDefined") or (p.get("not") == false and p.get("condition").type.name == "NotOperatorExpression" and p.get("condition").method.name == "isUndefined") or (p.get("not") == true and p.get("condition").type.name <> "NotOperatorExpression" and p.get("condition").method.name == "isUndefined")) {
+								l++;
+							}
+							else {
+								notContainRef++;
+							}
+						}
+					}
+				}
+			}
+			allContainRef = eclass.eAllReferences->select(r|r.eOpposite.isDefined() and r.eOpposite.containment = true)->size();
+			if (l > 1 or (l <> 1 and contain = true and (end or (notContainRef == allContainRef and allContainRef == eclass.eAllReferences.size)))) {
+				Satisfy = false;
+				break;
+			}
+		}
+		if (Satisfy == true) {
+			var type : Sequence;
+			for (e in PC) {
+				var op;
+				var co;
+				if (e.get("for") == true or e.get("rule") == true) {
+					op = new ATLOutput!OperatorCallExp;
+					op.operationName = "<>";
+					if (e.get("rule") == true) {
+						co = new ATLOutput!OperationCallExp;
+					}
+					else {
+						co = new ATLOutput!CollectionOperationCallExp;
+					}
+					co.operationName = "size";
+					co.appliedProperty = op;
+					var v = new ATLOutput!IntegerExp;
+					v.integerSymbol = 0;
+					v.parentOperation = op;
+				}
+				if (not type.includes(e.get("type")) or (type.includes(e.get("type")) and ATLOutput!IteratorExp.all.select(t|t.source.source.name = e.get("type")).size() == 0)) {
+					if (e.get("rule") == true) {
+						classRef = new ATLOutput!OclModelElement;
+						classRef.name = e.get("type");
+						var model = new ATLOutput!OclModel;
+						model.name = "MM";
+						classRef.model = model;
+						var allInstances = new ATLOutput!OperationCallExp;
+						allInstances.OperationName = "allInstances";
+						allInstances.source = classRef;
+						allInstances.appliedProperty = co;
+					}
+					else {
+						IteratorExp = new ATLOutput!IteratorExp;
+						classRef = new ATLOutput!OclModelElement;
+						classRef.name = e.get("type");
+						var model = new ATLOutput!OclModel;
+						model.name = "MM";
+						classRef.model = model;
+						var allInstances = new ATLOutput!OperationCallExp;
+						allInstances.OperationName = "allInstances";
+						allInstances.source = classRef;
+						IteratorExp.name = "exists";
+						IteratorExp.source = allInstances;
+						it = new ATLOutput!Iterator;
+						it.varName = "p";
+						IteratorExp.iterators.add(it);
+					}
+					if (e.get("not")) {
+						var notOp = new ATLOutput!OperatorCallExp;
+						notOp.operationName = "not";
+						if (e.get("condition").type().name == "ExpressionOrStatementBlock") {
+							if (e.get("rule") == true) {
+								op.appliedProperty = notOp;
+							}
+							else if (e.get("for") == true) {
+								op.appliedProperty = notOp;
+								etl2atl(e.get("condition").expression).appliedProperty = co;
+							}
+							else {
+								etl2atl(e.get("condition").expression).appliedProperty = notOp;
+							}
+						}
+						else if (e.get("rule") == true) {
+							op.appliedProperty = notOp;
+						}
+						else if (e.get("for") == true) {
+							op.appliedProperty = notOp;
+							etl2atl(e.get("condition")).appliedProperty = co;
+						}
+						else {
+							etl2atl(e.get("condition")).appliedProperty = notOp;
+						}
+						if (e.get("rule") <> true) {
+							IteratorExp.body = notOp;
+						}
+					}
+					else if (e.get("condition").type().name == "ExpressionOrStatementBlock") {
+						if (e.get("for") == true) {
+							etl2atl(e.get("condition").expression).appliedProperty = co;
+							IteratorExp.body = op;
+						}
+						else {
+							IteratorExp.body = etl2atl(e.get("condition").expression);
+						}
+					}
+					else if (e.get("rule") == false) {
+						if (e.get("for") == true) {
+							etl2atl(e.get("condition")).appliedProperty = co;
+							IteratorExp.body = op;
+						}
+						else {
+							IteratorExp.body = etl2atl(e.get("condition"));
+						}
+					}
+					type.add(e.get("type"));
+				}
+				else {
+					var Plus = new ATLOutput!OperatorCallExp;
+					Plus.operationName = "and";
+					if (ATLOutput!IteratorExp.all.size() > 0) {
+						Plus.source = ATLOutput!IteratorExp.allInstances()->select(i|i.source.source.name = e.get("type"))->first().body;
+					}
+					if (e.get("not")) {
+						var notOp = new ATLOutput!OperatorCallExp;
+						notOp.operationName = "not";
+						if (e.get("condition").type().name == "ExpressionOrStatementBlock") {
+							if (e.get("rule") == true) {
+								op.appliedProperty = notOp;
+							}
+							else if (e.get("for") == true) {
+								op.appliedProperty = notOp;
+								etl2atl(e.get("condition").expression).appliedProperty = co;
+							}
+							else {
+								etl2atl(e.get("condition").expression).appliedProperty = notOp;
+							}
+						}
+						else if (e.get("rule") == true) {
+							op.appliedProperty = notOp;
+						}
+						else if (e.get("for") == true) {
+							op.appliedProperty = notOp;
+							etl2atl(e.get("condition")).appliedProperty = co;
+						}
+						else {
+							etl2atl(e.get("condition")).appliedProperty = notOp;
+						}
+						Plus.arguments.add(notOp);
+					}
+					else if (e.get("condition").type().name == "ExpressionOrStatementBlock") {
+						if (e.get("rule") == true) {
+							Plus.arguments.add(op);
+						}
+						else if (e.get("for") == true) {
+							etl2atl(e.get("condition").expression).appliedProperty = co;
+							Plus.arguments.add(op);
+						}
+						else {
+							Plus.arguments.add(etl2atl(e.get("condition").expression));
+						}
+					}
+					else if (e.get("rule") == true) {
+						Plus.arguments.add(op);
+					}
+					else if (e.get("for") == true) {
+						etl2atl(e.get("condition")).appliedProperty = co;
+						Plus.arguments.add(op);
+					}
+					else {
+						Plus.arguments.add(etl2atl(e.get("condition")));
+					}
+					if (ATLOutput!IteratorExp.all.size() > 0) {
+						ATLOutput!IteratorExp.allInstances()->select(i|i.source.source.name = e.get("type"))->first().body = Plus;
+					}
+				}
+			}
+			ATLOutput.store(ATLOutput.modelFile);
+			counter = counter + 1;
+			var path = ATLOutput.getResource();
+			var c = MyChecker.ATLtoAnATLyzerCall(path);
+			var a : Sequence = Sequence{};
+			var p = IN_MM!EPackage.allInstances()->first();
+			a.add(c);
+			var MyChecker : new Native("seet.checker.ETLChecker");
+			c1 = MyChecker.test(c, p);
+		}
+		else if (Satisfy) {
+			c1 = Sequence{"Satisfiable", ""};
+		}
+		else {
+			c1 = Sequence{"UnSatisfiable", ""};
+		}
+		if (c1.get(0) == "UnSatisfiable" or end) {
+			var s : OrderedSet;
+			var first : Boolean = true;
+			for (p in PC) {
+				var ifCondition : String;
+				if (p.get("condition").type().name == "ExpressionOrStatementBlock") {
+					ifCondition = model2code.print(p.get("condition").expression);
+				}
+				else if (p.get("rule") == true) {
+					ifCondition = p.get("condition").resolvedType.elementName;
+				}
+				else {
+					ifCondition = model2code.print(p.get("condition"));
+				}
+				var n : Boolean = true;
+				if (p.get("not") and (ifCondition.size() < 4 or (ifCondition.size() > 4 and ifCondition.substring(0, 4) <> "not "))) {
+					ifCondition = "not " + ifCondition;
+				}
+				else {
+					n = false;
+					if (p.get("not") == true and (ifCondition.size() < 4 or (ifCondition.size() > 4 and ifCondition.substring(0, 4) == "not "))) {
+						ifCondition = ifCondition.substring(4, ifCondition.length());
+					}
+				}
+				var target : ETL!EOLElement = searchTarget(p.get("condition"));
+				var targetName : String;
+				if (p.get("rule") == true) {
+					targetName = target.elementName;
+				}
+				else {
+					targetName = target.name;
+				}
+				var i : Integer;
+				for (c in ifCondition.toCharSequence()) {
+					if (c == ".") {
+						break;
+					}
+					i++;
+				}
+				if (n) {
+					ifCondition = ifCondition.substring(0, 4) + ifCondition.substring(4, i).replace(targetName, p.get("type")) + ifCondition.substring(i, ifCondition.length());
+				}
+				else {
+					ifCondition = ifCondition.substring(0, i).replace(targetName, p.get("type")) + ifCondition.substring(i, ifCondition.length());
+				}
+				if (p.get("for") == true) {
+					ifCondition = ifCondition + ".allInstances() -> size() <> 0";
+				}
+				if (p.get("rule") == true) {
+					ifCondition = ifCondition + ".allInstances() -> size() <> 0";
+				}
+				if (not s.includes(ifCondition.replace(" ", ""))) {
+					if (first == true) {
+						PCString = PCString + ifCondition;
+					}
+					else {
+						PCString = PCString + " and " + ifCondition;
+					}
+					first = false;
+				}
+				s.add(ifCondition.replace(" ", ""));
+			}
+		}
+	}
+	else {
+		PCString = "true";
+		c1 = Sequence{"Satisfiable", ""};
+	}
+	if (end == false) {
+		return c1.get(0);
+	}
+	else {
+		return Sequence{PCString, c1.get(1)};
+		var message = MetamodelConformance();
+		if (c1.get(1) <> "" and message == "") {
+			interfaceRule.showResultModel(AllPCString, c1.get(1));
+		}
+		else {
+			interfaceRule.showResult(AllPCString, message);
+		}
+		if (c1.get(0) == "UnSatisfiable") {
+			throw "UnSatisfiable Path!";
+		}
+	}
+}
+operation showResult() {
+	var message = MetamodelConformance();
+	if (message == "") {
+		interfaceRule.showResultModel(AllPCString, Allc1);
+	}
+	else {
+		interfaceRule.showResult(AllPCString, message);
+	}
+}
+operation CFG!EOLElement hasEquivalent() : Any {
+	var set : Sequence;
+	if (self.type().name == "MethodCallExpression" and Bag{"equivalent", "equivalents"}.includes(x.method.name)) {
+		set = Sequence{self};
+	}
+	set.add(CFG!MethodCallExpression.allInstances()->select(x|Bag{"equivalent", "equivalents"}.includes(x.method.name) and x.collectAllContainer().includes(self)).flatten());
+	return set.flatten;
+}

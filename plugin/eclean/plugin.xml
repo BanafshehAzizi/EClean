@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         id="eclean"
+         name="eclean"
+         point="org.eclipse.ui.popupMenus">
+      <objectContribution
+            adaptable="false"
+            id="ECLean"
+            objectClass="org.eclipse.core.resources.IFile">
+         <action
+               class="eclean.refactor.Refactor"
+               icon="icon/clean-code.png"
+               id="eclean.action1"
+               label="EClean">
+         </action>
+      </objectContribution>
+   </extension>
+
+</plugin>

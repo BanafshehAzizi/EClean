@@ -1,0 +1,143 @@
+var stage = 0;
+var N = 200000;
+var v = N;
+var e = N;
+var p = v / 10;
+generateRandomActivityInstance(v, e, p, stage);
+"random model generated.".println();
+operation generateRandomActivityInstance(v, e, p, stage) {
+	createActivityGraph(v, e, p, stage);
+}
+operation createActivityGraph(v, e, p, stage) {
+	var activityGraph = new ActivityDiagram!RootActivityGraph;
+	activityGraph.name = "graph";
+	activityGraph.top = createCompositeTopState(v, stage);
+	while (e > 0){
+		var transition = createRandomTransition(e, activityGraph, stage);
+		activityGraph.transitions.add(transition);
+		e = e - 1;
+	}
+	var numberOfPartitions = p;
+	while (p > 0){
+		var part = createRandomPartition(p, activityGraph, numberOfPartitions, stage);
+		activityGraph.partition.add(part);
+		p = p - 1;
+	}
+}
+operation createRandomPartition(p, activityGraph, numberOfPartitions, stage) {
+	var res = new ActivityDiagram!Partition;
+	res.name = "Partition" + getRandomName(p, stage);
+	var partitionMaxSize = 5;
+	while (partitionMaxSize > 0){
+		var vertex = activityGraph.top.subvertex.random();
+		res.contents.add(vertex);
+		partitionMaxSize = partitionMaxSize - 1;
+	}
+	return res;
+}
+operation vertexIsAvailable(vertex) {
+	return not ActivityDiagram!Partition.all.exists(p|p.contents.includes(vertex));
+}
+operation createRandomTransition(e, activityGraph, stage) {
+	var tr = new ActivityDiagram!Transition;
+	var sourceVertex = activityGraph.top.subvertex.random();
+	var targetVertex = activityGraph.top.subvertex.random();
+	while (sourceVertex == targetVertex){
+		targetVertex = activityGraph.top.subvertex.random();
+	}
+	tr.source = sourceVertex;
+	tr.target = targetVertex;
+	var shouldCreateGuard = Set{"yes", "no"};
+	if (shouldCreateGuard.random() == "yes") {
+		tr.guard = createRandomGuard(e, stage);
+	}
+	return tr;
+}
+operation createRandomGuard(e, stage) {
+	var res = new ActivityDiagram!Guard;
+	res.expression = new ActivityDiagram!BooleanExpression;
+	res.expression.body = "Bool" + getRandomName(e, stage);
+	return res;
+}
+operation createCompositeTopState(v, stage) {
+	var compositeState = new ActivityDiagram!CompositeState;
+	compositeState.name = "CompositeState" + getRandomName(v, stage);
+	v = v - 1;
+	while (v > 0){
+		var stateVertex = createRandomStateVertex(v, stage);
+		compositeState.subvertex.add(stateVertex);
+		v = v - 1;
+	}
+	return compositeState;
+}
+operation getRandomName(seed, stage) {
+	return "random" + seed + "_" + stage;
+}
+operation createRandomStateVertex(v, stage) {
+	var possibleTypes = Set{"ObjectFlowState", "ActionState", "FinalState", "PseudostateInitial", "PseudostateJunction", "PseudostateFork", "PseudostateJoin"};
+	var choice = possibleTypes.random();
+	if (choice == "ObjectFlowState") {
+		return createObjectFlowState(v, stage);
+	}
+	else if (choice == "ActionState") {
+		return createActionState(v, stage);
+	}
+	else if (choice == "FinalState") {
+		return createFinalState(v, stage);
+	}
+	else if (choice == "PseudostateInitial") {
+		return createPseudostateInitial(v, stage);
+	}
+	else if (choice == "PseudostateJunction") {
+		return createPseudostateJunction(v, stage);
+	}
+	else if (choice == "PseudostateFork") {
+		return createPseudostateFork(v, stage);
+	}
+	else if (choice == "PseudostateJoin") {
+		return createPseudostateJoin(v, stage);
+	}
+	else {
+		throw "error";
+	}
+	return null;
+}
+operation createObjectFlowState(v, stage) {
+	var res = new ActivityDiagram!ObjectFlowState;
+	res.name = "ObjectFlowState" + getRandomName(v, stage);
+	return res;
+}
+operation createActionState(v, stage) {
+	var res = new ActivityDiagram!ActionState;
+	res.name = "ActionState" + getRandomName(v, stage);
+	return res;
+}
+operation createFinalState(v, stage) {
+	var res = new ActivityDiagram!FinalState;
+	res.name = "FinalState" + getRandomName(v, stage);
+	return res;
+}
+operation createPseudostateInitial(v, stage) {
+	var res = new ActivityDiagram!Pseudostate;
+	res.name = "InitialPseudostate" + getRandomName(v, stage);
+	res.kind = ActivityDiagram!PseudostateKind#initial;
+	return res;
+}
+operation createPseudostateJunction(v, stage) {
+	var res = new ActivityDiagram!Pseudostate;
+	res.name = "JunctionPseudostate" + getRandomName(v, stage);
+	res.kind = ActivityDiagram!PseudostateKind#junction;
+	return res;
+}
+operation createPseudostateFork(v, stage) {
+	var res = new ActivityDiagram!Pseudostate;
+	res.name = "ForkPseudostate" + getRandomName(v, stage);
+	res.kind = ActivityDiagram!PseudostateKind#fork;
+	return res;
+}
+operation createPseudostateJoin(v, stage) {
+	var res = new ActivityDiagram!Pseudostate;
+	res.name = "JoinPseudostate" + getRandomName(v, stage);
+	res.kind = ActivityDiagram!PseudostateKind#join;
+	return res;
+}
