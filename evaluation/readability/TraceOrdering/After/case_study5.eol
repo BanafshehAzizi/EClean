@@ -1,0 +1,171 @@
+var modelroot = Package.all.select(c|c.type.name = "Model");
+modelroot.rootElement();
+var allClasses : Set = modelroot.getAllOwnedClasses();
+var allRegion : Set = modelroot.getAllStateMachines().getAllRegions();
+allRegion.println();
+allRegion.size().println();
+allRegion.getAllStates().println();
+allRegion.getAllStates().size().println();
+allRegion.getAllTransitions().println();
+allRegion.getAllTransitions().size().println();
+for (s in modelroot.getAllStateMachines()) {
+	s.println();
+	s.getMainRegion().println();
+	s.getIntialState().println();
+}
+"test for owned class".println();
+var allClass : Set = modelroot.getAllOwnedClasses();
+allClasses.println();
+allClasses.first().getPrimitiveAttributes().println();
+
+operation UMLRTModel rootElement() : UMLRTModel!Package {
+	return Package.all.select(c|c.type.name = "Model").first;
+}
+operation UMLRTModel!State stateType() : String {
+	if (self.type.name = "State") {
+		if (self.getRegions().size() > 0) {
+			return "Composite";
+		}
+		return "State";
+	}
+}
+operation UMLRTModel!Pseudostate stateType() : String {
+	return "Pseudo";
+}
+operation UMLRTModel!Class getPrimitiveAttributes() : Set {
+	var attr : Set;
+	for (a in self.ownedAttribute) {
+		if (a.type.isDefined()) {
+			switch (a.type.name) {
+				case "Real": {
+					if (a.upper = 1) {
+						attr.add(a);
+					}
+				}
+				case "Integer": {
+					if (a.upper = 1) {
+						attr.add(a);
+					}
+				}
+				case "Boolean": {
+					if (a.upper = 1) {
+						attr.add(a);
+					}
+				}
+				case "String": {
+					if (a.upper = 1) {
+						attr.add(a);
+					}
+				}
+			}
+		}
+	}
+	return attr;
+}
+operation UMLRTModel!StateMachine getMainRegion() : UMLRTModel!Region {
+	for (r in self.region) {
+		for (s in r.subvertex) {
+			if (s.type.name = "Pseudostate" and not (r.transition.exists(t|t.target = s)) and (r.transition.exists(t|t.source = s)) and s.kind <> "choice" and s.kind <> "entryPoint" and s.kind <> "exitPoint") {
+				return r;
+			}
+		}
+	}
+	self.err("The state doesn't have the region that includes the intial state");
+}
+operation UMLRTModel!State getMainRegion() : UMLRTModel!Region {
+	for (r in self.region) {
+		return r;
+	}
+	self.err("The state doesn't have the region that includes the intial state");
+}
+operation UMLRTModel!StateMachine getIntialState() : UMLRTModel!Pseudostate {
+	for (r in self.region) {
+		for (s in r.subvertex) {
+			if (s.type.name = "Pseudostate" and s.kind = UMLRTModel!PseudostateKind#initial and r.transition.exists(t|t.source = s)) {
+				return s;
+			}
+		}
+	}
+	self.err("No Intail state for state machine= ");
+}
+operation Any getAllTransitions() : Set {
+	var allTransitions : Set;
+	for (r in self) {
+		if (r.subvertex.isDefined()) {
+			allTransitions.addAll(r.transition);
+		}
+	}
+	return allTransitions;
+}
+operation Any getAllStates() : Set {
+	var allStates : Set;
+	for (r in self) {
+		if (r.subvertex.isDefined()) {
+			allStates.addAll(r.subvertex);
+		}
+	}
+	return allStates;
+}
+operation Any getAllRegions() : Set {
+	var allRegions : Set;
+	for (sm in self) {
+		allRegions.addAll(sm.getRegions());
+	}
+	return allRegions;
+}
+operation Any getRegions() : Set {
+	var allRegion : Set;
+	allRegion.addAll(self.region);
+	var tempAllRegion : Set;
+	for (r in allRegion) {
+		for (s in r.subvertex) {
+			if (s.type.name = "State") {
+				var tempRegion : Set = s.getRegions();
+				if (tempRegion.isDefined()) {
+					tempAllRegion.addAll(tempRegion);
+				}
+			}
+		}
+	}
+	if (tempAllRegion.isDefined()) {
+		allRegion.addAll(tempAllRegion);
+	}
+	return allRegion;
+}
+operation UMLRTModel!Package getAllStateMachines() : Set {
+	var tempAllStateMachine : Set;
+	var childs : Set = self.getAllOwnedClasses();
+	for (c in childs) {
+		var tempStateMachine : UMLRTModel!StateMachine = c.getStateMachine();
+		if (tempStateMachine.isDefined()) {
+			tempAllStateMachine.add(tempStateMachine);
+		}
+	}
+	return tempAllStateMachine;
+}
+operation UMLRTModel!Class getStateMachine() : UMLRTModel!StateMachine {
+	for (b in self.ownedBehavior) {
+		if (b.type.name = "StateMachine") {
+			return b;
+		}
+	}
+}
+operation UMLRTModel!Package getAllOwnedClasses() : Set {
+	var childs : Set = self.packagedElement.select(e|e.type.name = "Class");
+	for (p in self.getAllNestedPackage()) {
+		childs.addAll(p.getAllOwnedClasses());
+	}
+	return childs;
+}
+operation UMLRTModel!Package getAllNestedPackage() : Set {
+	var firstNestedPackage : Set = self.packagedElement.select(e|e.type.name = "Package");
+	var allNestedPackage : Set;
+	for (p in firstNestedPackage) {
+		var tempResult : Set = p.getAllNestedPackage();
+		if (tempResult.isDefined()) {
+			allNestedPackage.addAll(tempResult);
+		}
+	}
+	allNestedPackage.addAll(firstNestedPackage);
+	return allNestedPackage;
+}

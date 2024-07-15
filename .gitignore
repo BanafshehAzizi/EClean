@@ -1,0 +1,12 @@
+# Eclipse project files
+plugin/eclean/classpath
+plugin/eclean/.project
+plugin/eclean/.settings/
+
+# Compiled output
+plugin/eclean/bin/
+plugin/eclean/target/
+
+# Log files
+plugin/eclean/*.log
+plugin/eclean/*.bak

@@ -1,0 +1,16 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Eclean
+Bundle-SymbolicName: eclean;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Bundle-Activator: eclean.Activator
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+Automatic-Module-Name: eclean
+Bundle-ActivationPolicy: lazy
+Require-Bundle: org.eclipse.epsilon.eol.engine,
+ org.eclipse.epsilon.eol.dt,
+ org.eclipse.jface,
+ org.eclipse.ui.workbench,
+ org.eclipse.ui,
+ org.eclipse.core.runtime
+Import-Package: org.eclipse.core.resources
